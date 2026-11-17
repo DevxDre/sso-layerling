@@ -170,7 +170,7 @@ Quelldaten und Datei-Hashes. Die `.env` und sämtliche Nutzerdaten werden nicht 
 
 Die bestehenden Ignore-Regeln für `build/`, `.local/`, `.env*` und Python-Artefakte
 decken diese Arbeitsweise ab; neue Quellen, Tests und Adapter-Lockdatei werden versioniert.
-Der laufende Webgo-Dateitest wurde in dieser lokalen Phase nicht verändert.
+Der laufende gehostete Dateitest wurde in dieser lokalen Phase nicht verändert.
 
 ## Prüfstand der ersten Stufe
 
@@ -245,4 +245,4 @@ Der folgende Abschnitt dokumentiert den installierten CAD-Teststand.
 
 
 
-Für gehostete Pakete zusätzlich `--webgo-test --deployment-config config/deployment.local.json` angeben.
+Für gehostete Pakete zusätzlich `--hosted-test --deployment-config config/deployment.local.json` angeben.

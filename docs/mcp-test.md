@@ -6,7 +6,7 @@ Layerling-Export. Der PHP-Test-Router stellt `/api/layerling-mcp` am Loopback be
 Der angepasste Export aktiviert die Anbindung auf der persönlichen CAD-Seite,
 wenn die geprüfte IServ-Sitzung für MCP freigegeben ist. Der Layerling-Fork
 liefert weiterhin den stdio-Client. Der Test-Router liegt außerhalb des
-DocumentRoots und wird bei der Paketierung für Webgo nicht mitgeliefert.
+DocumentRoots und wird bei der Paketierung für einen gehosteten Betrieb nicht mitgeliefert.
 
 #### Selbst ausprobieren
 
@@ -71,5 +71,5 @@ Alle 25 CAD-Integrationsprüfungen und sieben Build-/Paketprüfungen sind
 bestanden. Der Demo-Start und das Aufräumen nach Strg+C wurden separat geprüft.
 
 Nächster Schritt ist ein manueller Versuch mit einem eigenen Entwurf im
-lokalen Demo-Browser. Eine Teststellung auf Webgo erfordert einen separaten
+lokalen Demo-Browser. Eine gehostete Teststellung erfordert einen separaten
 Betriebstest für die PHP-FPM-Anbindung mit echten IServ-Gruppen.

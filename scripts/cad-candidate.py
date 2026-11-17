@@ -290,8 +290,8 @@ def hashes(directory):
         if file.is_file(): result[str(file.relative_to(directory))] = digest(file.read_bytes())
     return result
 
-def package(source, layerling, output, installed_private=None, installed_public='/home/www/layerling', *, webgo_test=False, deployment_config_path=None):
-    if webgo_test and deployment_config_path is None:
+def package(source, layerling, output, installed_private=None, installed_public='/home/www/layerling', *, hosted_test=False, deployment_config_path=None):
+    if hosted_test and deployment_config_path is None:
         raise ValueError('Hosted CAD test packaging requires private deployment configuration')
     metadata = validate_source(source)
     verify_source_tree(source, layerling)
@@ -338,9 +338,9 @@ def package(source, layerling, output, installed_private=None, installed_public=
     for suffix in ['js','css']: shutil.copyfile(ROOT/'cad'/('bridge.'+suffix), public/('cad-bridge.'+suffix))
     (public/'cad-session.php').write_text("<?php\ndeclare(strict_types=1);\nini_set('display_errors','0');\n(require '"+private+"/app/src/storage-bootstrap.php')->cadSession();\n")
     manifest_path = output/'manifest.json'; manifest = json.loads(manifest_path.read_text())
-    if webgo_test and not manifest['sourceCommit']:
+    if hosted_test and not manifest['sourceCommit']:
         raise ValueError('CAD test packaging requires a clean committed wrapper')
-    manifest['kind'] = 'sso-layerling-cad-test' if webgo_test else 'sso-layerling-cad-candidate'
+    manifest['kind'] = 'sso-layerling-cad-test' if hosted_test else 'sso-layerling-cad-candidate'
     manifest['files'] = {str(p.relative_to(output)):digest(p.read_bytes()) for p in sorted(output.rglob('*')) if p.is_file() and p != manifest_path}
     manifest_path.write_text(json.dumps(manifest, indent=2)+'\n')
     for p in output.rglob('*'): p.chmod(0o700 if p.is_dir() else 0o600)
@@ -351,11 +351,11 @@ if __name__ == '__main__':
     commands = parser.add_subparsers(dest='action', required=True)
     p = commands.add_parser('prepare'); p.add_argument('--layerling', type=Path, required=True); p.add_argument('--output', type=Path, required=True)
     p = commands.add_parser('build'); p.add_argument('--source', type=Path, required=True); p.add_argument('--layerling', type=Path, required=True)
-    p = commands.add_parser('package'); p.add_argument('--source', type=Path, required=True); p.add_argument('--layerling', type=Path, required=True); p.add_argument('--output', type=Path, required=True); p.add_argument('--webgo-test', action='store_true')
-    p.add_argument('--deployment-config', type=Path, help='Private deployment metadata, required with --webgo-test')
+    p = commands.add_parser('package'); p.add_argument('--source', type=Path, required=True); p.add_argument('--layerling', type=Path, required=True); p.add_argument('--output', type=Path, required=True); p.add_argument('--hosted-test', action='store_true')
+    p.add_argument('--deployment-config', type=Path, help='Private deployment metadata, required with --hosted-test')
     args = parser.parse_args()
     if args.action == 'prepare': prepare(args.layerling.resolve(), args.output.resolve()); print('Isolated CAD source prepared.')
     elif args.action == 'build': build(args.source.resolve(), args.layerling.resolve()); print('CAD candidate build verified.')
     else:
-        package(args.source.resolve(), args.layerling.resolve(), args.output.resolve(), webgo_test=args.webgo_test, deployment_config_path=args.deployment_config)
-        print('CAD test package prepared for explicit installation.' if args.webgo_test else 'Local CAD candidate packaged.')
+        package(args.source.resolve(), args.layerling.resolve(), args.output.resolve(), hosted_test=args.hosted_test, deployment_config_path=args.deployment_config)
+        print('CAD test package prepared for explicit installation.' if args.hosted_test else 'Local CAD candidate packaged.')
