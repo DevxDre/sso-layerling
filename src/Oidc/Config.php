@@ -1,0 +1,56 @@
+<?php
+declare(strict_types=1);
+namespace Sso\Layerling\Oidc;
+
+final class Config
+{
+    public const ISSUER = 'https://login.example.invalid';
+    public const AUTHORIZE_URL = self::ISSUER . '/iserv/auth/auth';
+    public const TOKEN_URL = self::ISSUER . '/iserv/auth/public/token';
+    public const USERINFO_URL = self::ISSUER . '/iserv/auth/userinfo';
+    public const JWKS_URL = self::ISSUER . '/iserv/auth/public/jwk';
+    public const ALGORITHMS = ['RS256'];
+    public const LEEWAY = 60;
+    public const TRANSACTION_TTL = 300;
+    public readonly string $redirectUri;
+    public function __construct(public readonly string $clientId, private readonly string $secret)
+    {
+        if (!preg_match('/^[a-zA-Z0-9_-]{1,128}$/D', $clientId)
+            || !preg_match('/^[\x21-\x7e]{16,4096}$/D', $secret)) {
+            throw new LoginFailed(LoginFailed::CONFIG);
+        }
+        $this->redirectUri = 'https://cad.example.invalid/auth/callback.php';
+    }
+    public function clientSecret(): string { return $this->secret; }
+    public function scope(): string { return 'openid iserv:uuid iserv:groups iserv:roles profile'; }
+    public function __debugInfo(): array { return ['clientId' => $this->clientId, 'secret' => '[redacted]']; }
+
+    /** Literal dotenv subset. No shell, expansion, eval, include, or external dotenv package. */
+    public static function fromFile(string $path): self
+    {
+        if (!is_file($path) || is_link($path) || filesize($path) > 16384
+            || (fileperms($path) & 0077) !== 0) {
+            throw new LoginFailed(LoginFailed::CONFIG);
+        }
+        $values = [];
+        foreach (file($path, FILE_IGNORE_NEW_LINES) as $line) {
+            $line = trim($line);
+            if ($line === '' || str_starts_with($line, '#')) { continue; }
+            if (!preg_match('/^(?:export\s+)?([A-Z_][A-Z0-9_]*)\s*=(.*)$/D', $line, $m)) {
+                throw new LoginFailed(LoginFailed::CONFIG);
+            }
+            if (!in_array($m[1], ['SSO_LAYERLING_OIDC_CLIENT_ID', 'SSO_LAYERLING_OIDC_CLIENT_SECRET'], true)) { continue; }
+            if (array_key_exists($m[1], $values)) { throw new LoginFailed(LoginFailed::CONFIG); }
+            $value = trim($m[2]);
+            if (str_starts_with($value, '"') || str_starts_with($value, "'")) {
+                $quote = $value[0];
+                if (strlen($value) < 2 || !str_ends_with($value, $quote)) { throw new LoginFailed(LoginFailed::CONFIG); }
+                $value = substr($value, 1, -1);
+                // Quotes contain literal values; escapes/interpolation are deliberately unsupported.
+                if (str_contains($value, $quote) || str_contains($value, '\\')) { throw new LoginFailed(LoginFailed::CONFIG); }
+            }
+            $values[$m[1]] = $value;
+        }
+        return new self($values['SSO_LAYERLING_OIDC_CLIENT_ID'] ?? '', $values['SSO_LAYERLING_OIDC_CLIENT_SECRET'] ?? '');
+    }
+}

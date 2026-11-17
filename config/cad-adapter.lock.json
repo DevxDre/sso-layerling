@@ -1,0 +1,25 @@
+{
+  "commit": "1c7f08467923789f5dd9263c49b786fc68de431b",
+  "manifoldRuntime": {
+    "version": "3.5.4",
+    "files": {
+      "manifold.js": "ca3c8a88df63bb3083013d1eb7f700bf23216594f6e98a2566e34f55d7341ce8",
+      "manifold.wasm": "73e3b419ad31294f6b1cc478173944e50efc4a34bfdeeff0107bdfc12975f11c"
+    }
+  },
+  "occtRuntime": {
+    "version": "5.15.0",
+    "sha256": "1f9068dcef229e4c1e39126710012c92211d46e577520adc6e40716f862b6ceb"
+  },
+  "preimages": {
+    "apps/web/src/components/LayerlingEditor.tsx": "25a3a1ff3a2f39ee2dfb4189af58d8ce9ae1c89c15d2205fa7ad47b2bcd06f71",
+    "apps/web/src/app/layout.tsx": "cef9edd11732826b01edf11d8495b721478b1bc51c7e4404b9cc44e61dc39086",
+    "apps/web/src/lib/editorMeshCore.ts": "4e2228511d889d1979240964e96fd858e9b674391c39dfd8ced061896128a7c9",
+    "apps/web/src/components/workplane/MyShapesSection.tsx": "07a42268d6e573717379f26a2a339f87a94b27e688e40d537aeaa860c7907a0d",
+    "apps/web/src/lib/customShapesServer.ts": "918d57c45d9bb23587dd8008863c27cf02f69bd04bd61329ef4052b56ce6664e",
+    "apps/web/src/lib/useAppUpdate.ts": "35929305a7b93b7ea53b73f0d224cebe940fdf77063755a2bd8c66117742b709",
+    "apps/web/src/lib/useWhatsNew.ts": "d363fcf8e6dbbcc017bf270bb712768e4235342746675ec359ed073c4705c7f3",
+    "apps/web/src/lib/offlineSupport.ts": "74a663e763d4d72fb3f7869e54600b49bd1e42b0a8af5ddd348f46ddc5722f89",
+    "apps/web/src/app/page.tsx": "29e58acffb16ac22dddfbd2a21f07839f9013fa765b6b9a3f6cedb4e18892983"
+  }
+}

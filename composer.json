@@ -1,0 +1,29 @@
+{
+  "name": "devxdre/sso-layerling",
+  "description": "IServ OIDC wrapper for Layerling",
+  "type": "project",
+  "license": "proprietary",
+  "require": {
+    "ext-curl": "*",
+    "ext-fileinfo": "*",
+    "ext-json": "*",
+    "ext-mbstring": "*",
+    "ext-openssl": "*",
+    "ext-session": "*",
+    "ext-zip": "*",
+    "firebase/php-jwt": "7.2.1",
+    "php": "^8.4"
+  },
+  "autoload": {
+    "psr-4": {
+      "Sso\\Layerling\\": "src/"
+    }
+  },
+  "config": {
+    "allow-plugins": false,
+    "platform": {
+      "php": "8.4.0"
+    },
+    "sort-packages": true
+  }
+}

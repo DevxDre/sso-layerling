@@ -1,0 +1,35 @@
+{
+  "enabled": false,
+  "environment": "test",
+  "origin": "https://cad.example.invalid",
+  "issuer": "https://login.example.invalid",
+  "redirectUri": "https://cad.example.invalid/auth/callback.php",
+  "clientId": "",
+  "clientSecret": "",
+  "scopes": [
+    "openid",
+    "iserv:uuid",
+    "iserv:groups",
+    "iserv:roles",
+    "profile"
+  ],
+  "identity": {
+    "binding": "issuer-and-iserv-uuid"
+  },
+  "groupBindings": {
+    "makerspace": "maker-fixture",
+    "admins": "admin-fixture",
+    "students": []
+  },
+  "studentRoleId": "ROLE_STUDENT",
+  "admission": {
+    "configured": true,
+    "allowAllIservUsers": true,
+    "allowedGroupIds": [],
+    "allowedRoleIds": []
+  },
+  "session": {
+    "absoluteSeconds": 21600,
+    "idleSeconds": 1800
+  }
+}

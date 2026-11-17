@@ -1,0 +1,47 @@
+html[data-sso-cad="pending"] body > *, html[data-sso-cad="locked"] body > * { visibility: hidden !important; pointer-events: none !important; }
+#sso-cad-guard { display: none; }
+html[data-sso-cad="pending"] #sso-cad-guard, html[data-sso-cad="locked"] #sso-cad-guard { display: block !important; visibility: visible !important; pointer-events: auto !important; position: fixed; inset: 0; z-index: 2147483647; padding: 12vh 8vw; background: #f5f7fa; color: #13202d; font: 1.1rem/1.6 system-ui, sans-serif; }
+#sso-cad-guard a { color: #174c8f; text-decoration: underline; }
+/* Reserve space for the closed menu below the work area and Layerling's own footer. */
+html[data-sso-cad] { --sso-footer-height: 38px; --editor-footer-height: var(--sso-footer-height); }
+html[data-sso-cad]:has(.editor-legal) { --editor-footer-height: calc(30px + var(--sso-footer-height)); }
+html[data-sso-cad] :is(.dashboard-shell, .layerling-editor) { height: calc(100vh - var(--sso-footer-height)); }
+html[data-sso-cad] .dashboard-legal.editor-legal { bottom: var(--sso-footer-height); height: 30px; }
+#sso-cad-footer {
+  position: fixed; inset: auto 0 0; z-index: 1000; box-sizing: border-box;
+  height: var(--sso-footer-height); padding: 3px 8px; display: flex; align-items: center;
+  background: var(--subbar, #fff); color: var(--foreground, #18232f); border-top: 1px solid var(--border, #cbd4df);
+  font: 13px/1.45 system-ui, sans-serif;
+}
+#sso-cad-footer summary, #sso-cad-nav button { cursor: pointer; }
+#sso-cad-footer > details > summary {
+  max-width: calc(100vw - 16px); box-sizing: border-box; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  padding: 4px 10px; border: 1px solid var(--border, #cbd4df); border-radius: 6px;
+  background: var(--background, #fff); font-weight: 650;
+}
+#sso-cad-footer > details > summary.sso-cad-foreign-account {
+  background: #ffdf8c; color: #382500; border-color: #956000;
+}
+#sso-cad-nav {
+  position: absolute; bottom: 100%; left: 8px; width: max-content; max-width: min(420px, calc(100vw - 16px));
+  max-height: calc(100dvh - var(--sso-footer-height) - 16px); overflow: auto; box-sizing: border-box;
+  padding: 10px 12px; border: 1px solid var(--border, #cbd4df); border-radius: 8px;
+  background: var(--background, #fff); box-shadow: 0 2px 12px #0003; overflow-wrap: anywhere;
+}
+#sso-cad-nav a { color: inherit; text-decoration: underline; }
+#sso-cad-accounts { margin: 8px 0; }
+#sso-cad-accounts label { display: grid; gap: 2px; margin-top: 6px; }
+#sso-cad-accounts input { width: 100%; box-sizing: border-box; }
+#sso-cad-accounts ul { max-height: min(230px, 36vh); overflow: auto; list-style: none; margin: 4px 0; padding: 0; }
+#sso-cad-accounts a { display: block; padding: 4px 2px; }
+#sso-cad-accounts a[aria-current] { font-weight: 700; text-decoration: none; }
+#sso-cad-accounts p { margin: 4px 0; }
+.sso-cad-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 8px; }
+.sso-cad-actions form { margin: 0; }
+#sso-cad-find-design { display: none; }
+body:has([data-sso-design-search]) #sso-cad-find-design { display: inline-block; }
+html[data-sso-can-delete="false"] :is(
+  .project-card-menu .delete, .dashboard-select-bar .delete, .dashboard-confirm-delete,
+  [aria-labelledby="empty-project-title"] .dashboard-confirm-cancel,
+  [data-sso-delete], .my-shape-tile-action.danger
+) { display: none !important; }

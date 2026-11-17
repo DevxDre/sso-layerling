@@ -1,0 +1,48 @@
+name: Fehler melden
+description: Einen Fehler mit nachvollziehbaren Schritten beschreiben.
+title: "[Fehler]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Bitte zuerst CONTRIBUTING.md lesen. Sicherheitsprobleme vertraulich nach SECURITY.md melden.
+        Keine Secrets, Tokens, Cookies, echten Kontokennungen oder Schülerprojekte anhängen.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Was funktioniert nicht?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version oder Commit
+  - type: textarea
+    id: steps
+    attributes:
+      label: Schritte zum Nachstellen
+      description: Möglichst mit synthetischen Daten und der kleinsten nötigen Konfiguration.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Erwartetes Verhalten
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Tatsächliches Verhalten
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Umgebung
+      description: PHP-Version, Betriebssystem und Browser; gegebenenfalls lokaler Test oder gehostetes Paket.
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Bereinigte Protokolle oder Screenshots
+      description: Ausschließlich synthetische oder anonymisierte Daten verwenden.
