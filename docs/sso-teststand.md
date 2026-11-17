@@ -11,6 +11,7 @@ PHP 8.4 ausdrücklich wählen, beispielsweise `/opt/homebrew/opt/php@8.4/bin/php
 
 ```bash
 /opt/homebrew/opt/php@8.4/bin/php tests/oidc_test.php
+python3 -W error tests/integrated_storage_http_test.py --php /opt/homebrew/opt/php@8.4/bin/php --layerling ../layerling --alternate-profile
 python3 -W error tests/deployment_config_test.py --php /opt/homebrew/opt/php@8.4/bin/php --layerling ../layerling
 python3 -W error tests/sso_http_test.py --php /opt/homebrew/opt/php@8.4/bin/php
 python3 -W error tests/install_sso_test.py --php /opt/homebrew/opt/php@8.4/bin/php
@@ -29,9 +30,9 @@ python3 scripts/package-sso-test.py --output build/sso-test --deployment-config 
 python3 scripts/package-sso-test.py --output build/storage-test --layerling ../layerling --deployment-config config/deployment.local.json
 ```
 
-Die Paketierung übernimmt nur benötigte Metadaten in das private Paket. Dazu gehören
-`issuer`, `origin` und `redirectUri`: validierte private Adressen ersetzen dort die öffentlichen
-Beispieladressen. Für Installation den zum Paket gehörenden Installer unter
+Die Paketierung schreibt das validierte [OIDC-Profil](oidc-profile.md) in die private App.
+Dort werden Issuer, Origin und Claim-Zuordnung zur Laufzeit geladen. Der Callback entspricht
+dem konfigurierten Origin mit `/auth/callback.php`. Für Installation den zum Paket gehörenden Installer unter
 `private/app/scripts/install-sso-test.php` verwenden, damit Zielprüfungen und App übereinstimmen. Interne Dokumente,
 `.env`, Testsitzungen und Nutzerprojekte gehören nicht dazu. Das Installer-Ziellayout ist im
 Quellcode festgelegt; Änderungen daran separat prüfen. Die feste Client-ID im Quellcode wurde

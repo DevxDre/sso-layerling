@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Sso\Layerling;
 
-/** Server-owned request snapshot; no roles/groups from cookies or requests. */
+/** Historical loopback policy using a server-owned authorization snapshot. */
 final class Policy
 {
     private readonly array $principals;

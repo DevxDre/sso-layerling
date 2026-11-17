@@ -1,6 +1,6 @@
 # IServ-SSO: technischer Prüfvertrag
 
-Der Wrapper verwendet feste Anbieter- und Callback-Adressen aus `src/Oidc/Config.php`,
+Der Wrapper verwendet die privaten Deployment-Adressen und das [IServ-Standardprofil](../config/oidc-iserv.json),
 Authorization Code mit PKCE S256 und RS256. Endpunkte dürfen nicht aus Browserparametern
 oder ungeprüften Tokens übernommen werden.
 

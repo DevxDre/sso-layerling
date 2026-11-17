@@ -24,7 +24,7 @@ $labelCounts = array_count_values(array_map($label, $displayGroups));
   <p><label>Kurzer Arbeitsauftrag<br><textarea name="instructions" rows="4" maxlength="2000" required></textarea></label></p>
   <p><label>Layerling-Datei (.lyl, bis 32 MiB) <input name="project" type="file" accept=".lyl" required></label></p>
   <fieldset>
-    <legend>IServ-Gruppen für diesen Arbeitsauftrag</legend>
+    <legend>Gruppen für diesen Arbeitsauftrag</legend>
     <?php foreach ($displayGroups as $id): ?>
       <div><label><input type="checkbox" name="groups[]" value="<?= $e($id) ?>"> <?= $e($labelCounts[$label($id)] > 1 ? $label($id) . ' (' . $id . ')' : $label($id)) ?></label></div>
     <?php endforeach; ?>
@@ -33,7 +33,7 @@ $labelCounts = array_count_values(array_map($label, $displayGroups));
 </form>
 </section>
 <?php elseif ($access['teacher']): ?>
-<p>Für die Veröffentlichung ist mindestens eine Gruppe aus deinem IServ-Login erforderlich.</p>
+<p>Für die Veröffentlichung ist mindestens eine Gruppe aus deiner Anmeldung erforderlich.</p>
 <?php endif; ?>
 <section>
 <h2><?= $access['teacher'] ? 'Meine veröffentlichten Vorlagen' : 'Verfügbare Vorlagen' ?></h2>

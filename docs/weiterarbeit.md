@@ -7,8 +7,8 @@ Begriffe: [Glossar](../GLOSSARY.md). Geplante Entwicklung: [Roadmap](roadmap.md)
 
 Der PHP-Wrapper verbindet OIDC-Anmeldung mit persönlichen Layerling-Projekten,
 Betreuungs-/Adminrechten, Vorlagen und einem kontrolliert gebauten statischen CAD-Export.
-Die aktuelle Anbieteranbindung enthält noch IServ-spezifische Endpunktpfade, Claims und Texte.
-Anbieter-, Anwendungs- und Callback-Adressen kommen beim Paketbau aus privater Konfiguration.
+Das [OIDC-Profil](oidc-profile.md) legt Anzeigename, Endpunkte, Scopes und Claim-Zuordnungen
+fest. Paketierte Profile und Berechtigungsbindungen liegen in der privaten App.
 Öffentliche Quellen und Tests verwenden ausschließlich reservierte Beispieladressen.
 
 Der Editor wird aus dem Pin in `upstream.lock.json` gebaut; Adapter und zusätzliche
@@ -27,8 +27,7 @@ nächsten Anmeldung des Eigentümers. Der Rechtevertrag ist in den
 Reale Zugangsdaten, Benutzer-/Gruppenkennungen, Betriebsnotizen und Installationsprotokolle
 gehören ausschließlich in ignorierte private Dateien außerhalb öffentlicher Webverzeichnisse.
 Sie sind kein Bestandteil dieses Repositories. Öffentliche Testnamen sind als unproblematisch
-geprüft und müssen nicht bereinigt werden. Ihre fachlichen Zuordnungen sollen gemäß Roadmap
-je Deployment konfigurierbar werden.
+geprüft. Die fachlichen Zuordnungen sind je Deployment konfigurierbar.
 
 Bestehende Eigentümerbindungen, Projekte und Vorlagen bei Umstellungen erhalten.
 Die [Migrationsbeschreibung](installation-und-migration.md) erläutert die Grenzen der
@@ -47,11 +46,21 @@ Historische Ergebnisse sind kein neuer Testlauf nach späteren Änderungen.
 Die lokale MCP-Anbindung ist mit synthetischen Konten geprüft. Eine gehostete Freigabe
 benötigt einen gesonderten PHP-FPM-Betriebstest. Anleitung: [MCP-Test](mcp-test.md).
 
+## Abnahme der OIDC-Generalisierung
+
+Mit PHP 8.4.19 und dem neu gebauten CAD-Kandidaten aus dem unveränderten Pin
+bestanden 26 CAD-HTTP-/Browserfälle für IServ und 28 für das synthetische
+Campus-Profil. Dazu gehören Vorlagen, Rollen- und Gruppenrechte, Kontodiagnose,
+Klassen sowie lokale MCP-Freigaben. Die integrierten Campus-Dateitests prüften
+zusätzlich den Wechsel einer Gruppen-Claim-Zuordnung mit vorhandener Eigentümer-ID.
+Der Installer-Test bestätigt die Upgrade-Grenzen bei Änderung des Identitätsclaims
+und bei neuer Client-Registrierung mit `sub` als Eigentümerbindung.
+Echte Anmeldeserver und gehostetes PHP-FPM wurden in dieser Abnahme nicht verwendet.
+
 ## Nächste Schritte
 
-Die [Roadmap](roadmap.md) konkretisiert die Anbieter-, Rollen-, Gruppen- und Klassen-
-Generalisierung samt Abnahmekriterien für zwei unterschiedliche Deployment-Profile.
-Den sporadischen Vorlagen-Browserkonflikt separat untersuchen.
+Den sporadischen Vorlagen-Browserkonflikt separat untersuchen. Die [Roadmap](roadmap.md)
+hält den Abnahmevertrag für beide Deployment-Profile fest.
 
 Prüfaufrufe: [SSO-Teststand](sso-teststand.md), [CAD-Integration](cad-integration.md).
 Commit, Push und Deployment nur im ausdrücklich beauftragten Umfang durchführen.

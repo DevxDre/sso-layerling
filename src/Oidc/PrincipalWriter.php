@@ -6,14 +6,14 @@ namespace Sso\Layerling\Oidc;
 final class PrincipalWriter
 {
     public function __construct(private string $private) {}
-    public function write(Claims $claims, int $sequence, int $now, array $studentGroups = [], ?string $studentRole = null): string
+    public function write(Claims $claims, int $sequence, int $now, array $studentGroups = [], ?string $studentRole = null, ?string $authorizationMapping = null): string
     {
         $lock = fopen($this->private . '/authorization.lock', 'c+b');
         if (!$lock || !flock($lock, LOCK_EX)) { throw new LoginFailed(LoginFailed::ACCOUNT_LOCK); }
         try {
             $file = $this->private . '/principals.json';
             $records = Json::object((string)file_get_contents($file)) ?? throw new LoginFailed(LoginFailed::ACCOUNT_WRITE);
-            $binding = hash('sha256', Config::ISSUER . "\0" . $claims->uuid);
+            $binding = hash('sha256', $claims->issuer . "\0" . $claims->externalId);
             $owner = null;
             foreach ($records as $id => $record) {
                 if (($record['identityHash'] ?? null) === $binding) {
@@ -28,6 +28,8 @@ final class PrincipalWriter
             }
             $records[$owner] = ['identityHash' => $binding, 'enabled' => true, 'groups' => $claims->groups,
                 'roles' => $claims->roles, 'student' => $claims->student($studentGroups, $studentRole),
+                'studentBasis' => ['role' => $studentRole, 'groups' => array_values(array_intersect($studentGroups, $claims->groups))],
+                'authorizationMapping' => $authorizationMapping,
                 'name' => $claims->name, 'classes' => $claims->classes, 'checkedAt' => $now, 'loginSequence' => $sequence];
             $tmp = tempnam($this->private, '.principals-');
             try {

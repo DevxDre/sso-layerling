@@ -1,0 +1,19 @@
+{
+  "name": "IServ",
+  "endpoints": {
+    "authorize": "/iserv/auth/auth",
+    "token": "/iserv/auth/public/token",
+    "userinfo": "/iserv/auth/userinfo",
+    "jwks": "/iserv/auth/public/jwk"
+  },
+  "scopes": ["openid", "iserv:uuid", "iserv:groups", "iserv:roles", "profile"],
+  "claims": {
+    "identity": {"claim": "iserv:uuid", "format": "uuid"},
+    "name": "name",
+    "username": "preferred_username",
+    "roles": {"claim": "iserv:roles", "format": "objects", "id": "id"},
+    "groups": {"claim": "iserv:groups", "format": "map", "id": "id", "label": "name", "account": "act"}
+  },
+  "templatePublisherRoleIds": ["ROLE_TEACHER"],
+  "classPrefixes": ["klasse."]
+}

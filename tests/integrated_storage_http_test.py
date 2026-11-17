@@ -18,7 +18,7 @@ from urllib.parse import urlencode
 import zipfile
 ROOT=Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--php',required=True);parser.add_argument('--layerling',type=Path,required=True)
-OPTIONS,remaining=parser.parse_known_args()
+parser.add_argument('--alternate-profile', action='store_true');OPTIONS,remaining=parser.parse_known_args()
 spec=importlib.util.spec_from_file_location('sso_support',ROOT/'tests/sso_http_test.py');sso=importlib.util.module_from_spec(spec);spec.loader.exec_module(sso)
 MAKER='maker-fixture';ADMIN='admin-fixture'
 U1='11111111-1111-1111-1111-111111111111';U2='22222222-2222-2222-2222-222222222222';UM='33333333-3333-3333-3333-333333333333';UA='44444444-4444-4444-4444-444444444444'
@@ -33,10 +33,29 @@ class IntegratedStorageTest(unittest.TestCase):
     begin=sso.SsoHTTPTest.begin
     callback_for_redirect=sso.SsoHTTPTest.callback_for_redirect
     exchanges=sso.SsoHTTPTest.exchanges
+    alternate = json.loads((ROOT/'tests/oidc-alternate.json').read_text()) if OPTIONS.alternate_profile else None
+    alternate_roles = {'ROLE_STUDENT': 'learner', 'ROLE_TEACHER': 'instructor',
+                       'ROLE_ADMIN': 'operator', 'ROLE_TEACH_AKTIV': 'active-instructor'}
+    class_prefix = 'cohort-' if alternate else 'klasse.'
+
+    def provider_role(self, role):
+        return self.alternate_roles.get(role, role) if self.alternate else role
+
+    def provider_group(self, group):
+        if self.alternate and group in (MAKER, ADMIN):
+            return self.alternate['groupBindings']['makerspace' if group == MAKER else 'admins']
+        return group
     @classmethod
     def setUpClass(cls):
         original=sso.package.package
-        def package(output,installed_private):return original(output,installed_private,OPTIONS.layerling,str(output/'public'))
+        def package(output, installed_private):
+            deployment = None
+            if cls.alternate:
+                deployment = output.parent/'deployment.local.json'
+                deployment.write_text(json.dumps(cls.alternate))
+                deployment.chmod(0o600)
+            return original(output, installed_private, OPTIONS.layerling, str(output/'public'),
+                            deployment_config_path=deployment)
         with patch.object(sso.package,'package',package):sso.SsoHTTPTest.setUpClass.__func__(cls)
         for name in ['sessions','projects','templates']:(cls.private/name).mkdir(mode=0o700)
         (cls.private/'audit.jsonl').touch()
@@ -60,6 +79,12 @@ class IntegratedStorageTest(unittest.TestCase):
             claims['preferred_username'] = preferred_username
         for group, act in (group_acts or {}).items():
             claims['iserv:groups'][group]['act'] = act
+        if self.alternate:
+            memberships = [{'key': self.provider_group(group), 'title': value['name'],
+                            'handle': value.get('act')} for group, value in claims['iserv:groups'].items()]
+            claims = {'sub': claims['sub'], 'permissions': [self.provider_role(r['id']) for r in claims['iserv:roles']],
+                      'memberships': memberships, 'display_name': claims.get('name'),
+                      'login_handle': claims.get('preferred_username')}
         callback,logout=self.begin(c,claims=claims,**flags)
         response=c.request(callback);self.assertEqual(response[0],303,response[2])
         self.assertIn('SSO_LAYERLING_SESSION',c.cookies)
@@ -143,6 +168,110 @@ class IntegratedStorageTest(unittest.TestCase):
         self.assertEqual(self.raw(teacher, 'POST', withdraw, body, headers)[0], 204)
         self.json(self.raw(self.login(U2, groups=['class-b']), path=download), 404)
         self.assertEqual(self.raw(student, path='/store.php?fileName=task.lyl')[2], project('template'))
+    @unittest.skipUnless(OPTIONS.alternate_profile, 'Alternate provider claim contract')
+    def test_alternate_profile_login_diagnostics_and_claim_validation(self):
+        client = sso.Client(self)
+        csrf, page = self.page(client)
+        self.assertIn(b'Mit Campus &lt;Test&gt; anmelden', page[2])
+        self.assertIn("form-action 'self' https://identity.example.invalid", page[1]['content-security-policy'])
+        response = client.request('/auth/start.php', 'POST', {'csrf': csrf})
+        self.assertTrue(response[1]['location'].startswith('https://identity.example.invalid/workshop/oauth/authorize?'))
+        self.assertIn('scope=openid%20profile%20memberships', response[1]['location'])
+        mentor = self.provider_group(MAKER)
+        claims = {'sub': 'Case-Sensitive-User', 'permissions': ['learner'], 'memberships': [
+            {'key': mentor, 'title': 'Verified mentors'},
+            {'key': 'unlisted', 'title': 'Private fixture'},
+        ]}
+        callback = self.callback_for_redirect(client, response, claims=claims)
+        self.assertEqual(client.request(callback)[0], 303)
+        profile_page = client.request('/konto/' if getattr(self, 'login_page', '/') == '/index.php' else '/')[2]
+        self.assertIn('Anmeldung über Campus &lt;Test&gt; erfolgreich'.encode(), profile_page)
+        self.assertIn(b'Verified mentors', profile_page)
+        self.assertNotIn(b'Private fixture', profile_page)
+        owners = self.json(self.raw(client, path='/owners.php'))['owners']
+        owner = next(entry['userId'] for entry in owners if entry['isSelf'])
+        registry = json.loads((self.private/'principals.json').read_text())
+        self.assertEqual(registry[owner]['identityHash'],
+                         hashlib.sha256(b'https://identity.example.invalid/realms/workshop\0Case-Sensitive-User').hexdigest())
+
+        for override, userinfo in [
+            ({'permissions': {'0': 'instructor'}}, {}),
+            ({'memberships': [{'key': mentor, 'title': 'x'}, {'key': mentor, 'title': 'y'}]}, {}),
+            ({'memberships': [{'key': 123}]}, {}),
+            ({}, {'permissions': ['instructor']}),
+        ]:
+            with self.subTest(override=override, userinfo=userinfo):
+                rejected = sso.Client(self)
+                callback, _ = self.begin(rejected, claims=claims | override, userinfoClaims=userinfo)
+                self.assertEqual(rejected.request(callback)[0], 503)
+                self.assertNotIn('SSO_LAYERLING_SESSION', rejected.cookies)
+        self.assertEqual(json.loads((self.private/'principals.json').read_text()), registry)
+
+        ordinary = self.login(U2, ['ROLE_ADMIN'])
+        spoof = sso.Client(self)
+        spoof_claims = {'sub': 'same-label-account', 'permissions': ['operator'],
+                        'memberships': [{'key': 'unlisted', 'title': mentor}]}
+        callback, _ = self.begin(spoof, claims=spoof_claims)
+        self.assertEqual(spoof.request(callback)[0], 303)
+        self.json(self.raw(spoof, path='/store.php?'+urlencode({'_sso_owner': ordinary.owner})), 403)
+        self.json(self.raw(spoof, path='/vorlagen.php'), 403)
+
+    @unittest.skipUnless(OPTIONS.alternate_profile, 'Alternate provider claim contract')
+    def test_group_claim_change_requires_fresh_privileges_and_keeps_student_owner(self):
+        student = self.login()
+        mentor = self.login(UM, ['ROLE_TEACHER'], [MAKER])
+        self.json(self.upload(student, 'existing student'), 201)
+        personal = '/store.php?fileName=same.lyl'
+        foreign = personal + '&' + urlencode({'_sso_owner': student.owner})
+        self.assertEqual(self.raw(mentor, path=foreign)[2], project('existing student'))
+
+        app = self.private/'app'
+        profile_file, storage_file = app/'oidc-profile.json', app/'storage.json'
+        original_profile, original_storage = profile_file.read_text(), storage_file.read_text()
+        profile, storage = json.loads(original_profile), json.loads(original_storage)
+        profile['provider']['claims']['groups']['claim'] = 'verified_memberships'
+        default = json.loads((ROOT/'config/oidc-iserv.json').read_text())
+        storage['authorizationMapping'] = sso.package.authorization_mapping(profile['provider'], default)
+        profile_file.write_text(json.dumps(profile))
+        storage_file.write_text(json.dumps(storage))
+        try:
+            self.json(self.raw(mentor, path=foreign), 403)
+            self.assertEqual(self.raw(student, path=personal)[2], project('existing student'))
+            refreshed = sso.Client(self)
+            callback, _ = self.begin(refreshed, claims={
+                'sub': 'pairwise-' + UM, 'permissions': ['instructor'],
+                'verified_memberships': [{'key': self.provider_group(MAKER)}],
+            })
+            self.assertEqual(refreshed.request(callback)[0], 303)
+            self.assertEqual(self.raw(refreshed, path=foreign)[2], project('existing student'))
+            owners = self.json(self.raw(refreshed, path='/owners.php'))['owners']
+            self.assertEqual(next(owner['userId'] for owner in owners if owner['isSelf']), mentor.owner)
+        finally:
+            profile_file.write_text(original_profile)
+            storage_file.write_text(original_storage)
+
+    def test_profile_presentation_upgrade_keeps_owner_projects_and_templates(self):
+        teacher = self.login(UA, ['ROLE_TEACHER'], ['class-b'])
+        student = self.login(U1, groups=['class-b'])
+        self.json(self.upload(student, 'stored before profile update'), 201)
+        self.assertEqual(self.publish_template(teacher, ['class-b'])[0], 201)
+        profile = self.private/'app/oidc-profile.json'
+        original = profile.read_text()
+        config = json.loads(original)
+        config['provider']['name'] = 'Renamed test provider'
+        config['provider']['endpoints'] = {
+            key: '/updated/' + key for key in config['provider']['endpoints']
+        }
+        profile.write_text(json.dumps(config))
+        try:
+            again = self.login(U1, groups=['class-b'])
+            self.assertEqual(again.owner, student.owner)
+            self.assertEqual(self.raw(again, path='/store.php?fileName=same.lyl')[2], project('stored before profile update'))
+            self.assertIn(b'data-copy-template', self.raw(again, path='/vorlagen.php')[2])
+            self.assertEqual(self.login(UA, ['ROLE_TEACHER'], ['class-b']).owner, teacher.owner)
+        finally:
+            profile.write_text(original)
+
     def test_01_anonymous_api_and_old_portal_cookie_denied(self):
         c=sso.Client(self)
         for path in ['/store.php','/owners.php','/session.php']:self.json(self.raw(c,path=path),401)

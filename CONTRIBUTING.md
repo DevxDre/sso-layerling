@@ -8,8 +8,8 @@ für Beiträge, die mit einem KI-Assistenten entstehen.
 
 Lies zuerst die [README](README.md) und die [Arbeitsregeln](AGENTS.md).
 Der [Entwicklungsstand](docs/weiterarbeit.md) unterscheidet zwischen vorhandenem Verhalten
-und geplanten Änderungen. Insbesondere die anbieterunabhängige OIDC-Anbindung ist ein
-Entwicklungsziel; die aktuelle Implementierung enthält noch IServ-spezifische Stellen.
+und geplanten Änderungen. Die [OIDC-Profile](docs/oidc-profile.md) beschreiben die
+konfigurierbaren Anbieter- und Berechtigungsbindungen.
 
 | Bereich | Dateien und Verzeichnisse |
 |---|---|

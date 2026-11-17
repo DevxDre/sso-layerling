@@ -6,6 +6,7 @@ namespace Sso\Layerling;
 require_once __DIR__ . '/Gateway.php';
 require_once __DIR__ . '/Policy.php';
 require_once __DIR__ . '/SsoPolicy.php';
+require_once __DIR__ . '/StorageConfig.php';
 require_once __DIR__ . '/Operation.php';
 require_once __DIR__ . '/Audit.php';
 require_once __DIR__ . '/ExportFiles.php';

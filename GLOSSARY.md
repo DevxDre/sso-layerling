@@ -6,10 +6,10 @@ sie überall umzubenennen.
 
 | Begriff | Bedeutung und Beispiel |
 |---|---|
-| Anmeldeserver / OIDC-Anbieter | Externer Dienst, der die Anmeldung bestätigt. IServ ist die aktuelle Anbindung. Adressen werden je Deployment privat konfiguriert; freie Endpunktpfade, Anzeigename und Claim-Zuordnung sind als Verallgemeinerung geplant. |
+| Anmeldeserver / OIDC-Anbieter | Externer Dienst, der die Anmeldung bestätigt. IServ ist das Standardprofil. Adressen, Endpunktpfade, Anzeigename und Claim-Zuordnung werden je Deployment privat konfiguriert. |
 | OIDC-Client | Registrierung des Wrappers beim Anmeldeserver mit Client-ID, Callback und privatem Secret. Eine Client-ID ist kein Benutzerkonto. |
 | Claim | Vom Anbieter gelieferte Angabe über die angemeldete Identität. Nur geprüfte, normalisierte Claims dürfen eine Identitäts- oder Rechteentscheidung beeinflussen. |
-| Externe Identität | Anbieter und stabile Kennung des Benutzers. Aktuell wird die Eigentümerbindung aus Issuer und `iserv:uuid` abgeleitet; `sub` bindet die OIDC-Antwort und UserInfo aneinander. Ein späterer Anbieterwechsel braucht eine ausdrückliche Zuordnungsstrategie. |
+| Externe Identität | Anbieter und stabile Kennung des Benutzers. Die Eigentümerbindung leitet sich aus Issuer und stabilem Identitätsclaim ab. IServ verwendet `iserv:uuid`. `sub` bindet die OIDC-Antwort und UserInfo aneinander. Ein späterer Anbieterwechsel braucht eine ausdrückliche Zuordnungsstrategie. |
 | Internes Konto / Eigentümer-ID | Interne stabile Kennung, der Projekte zugeordnet sind. Anzeigename, Client-ID und Rollenname ersetzen diese Kennung nicht. |
 | Principal-Register | Privates serverseitiges Register der bekannten Identitäten und ihrer zuletzt gespeicherten SSO-Einstufung. Es ist kein vollständiges Schulverzeichnis. |
 | Eigentümer | Konto, dessen Projektbereich eine Datei gehört. Öffnet die Betreuung eine Schülerdatei, bleibt der Schüler Eigentümer. |

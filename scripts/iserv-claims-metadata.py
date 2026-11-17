@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read only selected group/role metadata from IServ's localhost IDM API.
+"""Historical IServ-only probe with fixed filters. Read selected group/role metadata from IServ's localhost IDM API.
 
 Run on the IServ itself, NOT the webhoster. No credentials, cookies, user lists,
 configuration reads, writes, or package installations. Never a web endpoint.

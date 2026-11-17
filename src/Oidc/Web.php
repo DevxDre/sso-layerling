@@ -16,7 +16,10 @@ final class Web
         private string $origin = 'https://cad.example.invalid', private ?\Sso\Layerling\StorageConfig $storage = null)
     {
         umask(0077);
-        $this->secure = $origin === 'https://cad.example.invalid';
+        $this->secure = Profile::httpsOrigin($origin);
+        if ($this->secure && $origin !== $config->profile->origin) {
+            throw new LoginFailed(LoginFailed::CONFIG);
+        }
         if (!$this->secure && !(PHP_SAPI === 'cli-server'
             && in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true)
             && preg_match('~^http://127\.0\.0\.1:[1-9][0-9]{0,4}$~D', $origin))) {
@@ -32,7 +35,10 @@ final class Web
             throw new LoginFailed(LoginFailed::CONFIG);
         }
         $storage?->assertRequest($private);
-        if ($storage !== null && $storage->values['origin'] !== $origin) { throw new LoginFailed(LoginFailed::CONFIG); }
+        if ($storage !== null && ($storage->values['origin'] !== $origin
+            || ($storage->values['authorizationMapping'] ?? null) !== $config->profile->authorizationMapping())) {
+            throw new LoginFailed(LoginFailed::CONFIG);
+        }
         foreach ($storage !== null ? ['contexts', 'sessions'] : ['contexts', 'sso-sessions'] as $dir) {
             if (is_link($private . '/' . $dir) || !is_dir($private . '/' . $dir) || !is_writable($private . '/' . $dir)) {
                 throw new LoginFailed(LoginFailed::CONFIG);
@@ -46,7 +52,7 @@ final class Web
         header('Pragma: no-cache');
         header('Referrer-Policy: no-referrer');
         header('X-Content-Type-Options: nosniff');
-        header("Content-Security-Policy: default-src 'none'; form-action 'self' https://login.example.invalid; frame-ancestors 'none'; base-uri 'none'");
+        header("Content-Security-Policy: default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
         header('Cross-Origin-Resource-Policy: same-origin');
     }
     private function cookie(string $name, string $value, int $expires = 0): void
@@ -83,12 +89,12 @@ final class Web
     }
     private function issue(string $owner, Claims $claims): void
     {
-        $diagnostic = $claims->diagnostic();
+        $diagnostic = $claims->diagnostic($this->config->profile->diagnosticGroupIds);
         if ($this->storage !== null) {
             $diagnostic['preferredUsername'] = $claims->preferredUsername;
-        }
-        if ($this->storage !== null && in_array('ROLE_TEACHER', $claims->roles, true)) {
-            $diagnostic['templateGroupLabels'] = $claims->groupLabels;
+            if (SsoPolicy::canPublishTemplates($claims->roles, $this->storage->values)) {
+                $diagnostic['templateGroupLabels'] = $claims->groupLabels;
+            }
         }
         $this->native->issue($owner, $diagnostic);
     }
@@ -151,19 +157,22 @@ final class Web
         // Native form POSTs under no-referrer carry Origin:null. Preserve the
         // same-origin form provenance; callback/redirect/error defaults stay no-referrer.
         header('Referrer-Policy: same-origin');
+        $issuerOrigin = $this->config->profile->issuerOrigin();
+        header("Content-Security-Policy: default-src 'none'; form-action 'self' $issuerOrigin; frame-ancestors 'none'; base-uri 'none'");
         header('Content-Type: text/html; charset=utf-8');
         $e = static fn(string $s) => htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $provider = $e($this->config->profile->provider['name']);
         $title = $account ? 'SSO Layerling – Konto' : ($hasCad ? 'SSO Layerling' : 'SSO Layerling – SSO-Test');
         echo '<!doctype html><html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>' . $title . '</title><main><h1>' . $title . '</h1>';
         if (!$account) {
             echo $this->storage !== null
                 ? ($hasCad
-                    ? '<p>Mit IServ anmelden und Layerling öffnen.</p>'
+                    ? '<p>Mit ' . $provider . ' anmelden und Layerling öffnen.</p>'
                     : '<p>Der Dateitest ist freigeschaltet. Der CAD-Editor folgt im nächsten Schritt.</p>')
-                : '<p>Dieser Test prüft die IServ-Anmeldung. Der CAD-Editor und Dateizugriffe sind noch nicht freigeschaltet.</p>';
+                : '<p>Dieser Test prüft die Anmeldung über ' . $provider . '. Der CAD-Editor und Dateizugriffe sind noch nicht freigeschaltet.</p>';
         }
         if ($session !== null) {
-            echo '<p>IServ-Anmeldung erfolgreich.</p><h2>Geprüfte Angaben des eigenen Kontos</h2>';
+            echo '<p>Anmeldung über ' . $provider . ' erfolgreich.</p><h2>Geprüfte Angaben des eigenen Kontos</h2>';
             if ($profile !== null) {
                 $username = $session['diagnostic']['preferredUsername'] ?? '';
                 echo '<p>Account: ' . $e(trim($username) === '' ? '–' : $username) . '</p>';
@@ -173,7 +182,9 @@ final class Web
             echo '<p>Rollen: ' . $e(implode(', ', $session['diagnostic']['roles'])) . '</p>';
             echo '<p>Gruppenanzahl: ' . (int)$session['diagnostic']['groupCount'] . '</p><ul>';
             foreach ($session['diagnostic']['relevantGroups'] as $group) {
-                echo '<li>' . $e($group['name']) . ': <code>' . $e($group['id']) . '</code></li>';
+                if (in_array($group['id'], $this->config->profile->diagnosticGroupIds, true)) {
+                    echo '<li>' . $e($group['name']) . ': <code>' . $e($group['id']) . '</code></li>';
+                }
             }
             echo '</ul>';
             if ($this->storage === null) { echo '<p>Diese Angaben schalten keine Fremddateirechte frei.</p>'; }
@@ -182,7 +193,7 @@ final class Web
         if ($templateAccess && ($templateAccess['teacher'] || $templateAccess['student'])) {
             echo '<p><a href="/vorlagen.php">CAD-Vorlagen</a></p>';
         }
-        echo '<form method="post" action="' . ($session ? '/auth/logout.php' : '/auth/start.php') . '"><input type="hidden" name="csrf" value="' . $e($csrf) . '"><button>' . ($session ? 'Lokal abmelden' : 'Mit IServ anmelden') . '</button></form>';
+        echo '<form method="post" action="' . ($session ? '/auth/logout.php' : '/auth/start.php') . '"><input type="hidden" name="csrf" value="' . $e($csrf) . '"><button>' . ($session ? 'Lokal abmelden' : 'Mit ' . $provider . ' anmelden') . '</button></form>';
         if (!$session) { echo '<form method="post" action="/auth/logout.php"><input type="hidden" name="csrf" value="' . $e($csrf) . '"><button>Laufende Anmeldung abbrechen</button></form>'; }
         echo '</main></html>';
         exit;
@@ -285,20 +296,21 @@ final class Web
         $contextId = $ctx->id;
         $ctx->close();
         // No native session or authorization/context lock during external requests.
-        if (isset($_GET['error']) || (isset($_GET['iss']) && $_GET['iss'] !== Config::ISSUER)) { throw new LoginFailed(LoginFailed::PROVIDER_ERROR); }
+        if (isset($_GET['error']) || (isset($_GET['iss']) && $_GET['iss'] !== $this->config->profile->issuer)) { throw new LoginFailed(LoginFailed::PROVIDER_ERROR); }
         $code = $_GET['code'] ?? null;
         if (!is_string($code) || !preg_match('/^[\x21-\x7e]{1,4096}$/D', $code)) { throw new LoginFailed(LoginFailed::CODE); }
         $identity = (new OidcClient($this->config, $this->transport, static fn() => time()))->complete($tx, $code);
-        $claims = Claims::from($identity);
+        $claims = Claims::from($identity, $this->config->profile);
         $ctx = new LoginContext($this->private, $contextId);
         $ctx->finish($sequence, function () use ($claims, $sequence): void {
             if ($this->openSession() !== null) {
                 session_write_close();
                 throw new LoginFailed(LoginFailed::SIGNED_IN);
             }
-            // A successful login updates only its own principal. No privileged bindings in this test release.
             $owner = (new PrincipalWriter($this->private))->write($claims, $sequence, time(),
-                $this->storage?->values['studentGroupIds'] ?? [], $this->storage?->values['studentRoleId'] ?? null);
+                $this->storage?->values['studentGroupIds'] ?? $this->config->profile->studentGroupIds,
+                $this->storage !== null ? $this->storage->values['studentRoleId'] : $this->config->profile->studentRoleId,
+                $this->config->profile->authorizationMapping());
             $this->issue($owner, $claims);
         });
         $ctx->close();

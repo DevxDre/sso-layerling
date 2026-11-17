@@ -1,0 +1,32 @@
+{
+  "origin": "https://workshop.example.invalid",
+  "issuer": "https://identity.example.invalid/realms/workshop",
+  "redirectUri": "https://workshop.example.invalid/auth/callback.php",
+  "clientId": "workshop-fixture-client",
+  "groupBindings": {
+    "makerspace": "workshop-mentors",
+    "admins": "workshop-operators",
+    "students": ["workshop-learners"]
+  },
+  "studentRoleId": "learner",
+  "diagnosticGroupIds": ["workshop-mentors", "workshop-operators"],
+  "provider": {
+    "name": "Campus <Test>",
+    "endpoints": {
+      "authorize": "/workshop/oauth/authorize",
+      "token": "/workshop/oauth/token",
+      "userinfo": "/workshop/profile",
+      "jwks": "/workshop/keys"
+    },
+    "scopes": ["openid", "profile", "memberships"],
+    "claims": {
+      "identity": {"claim": "sub", "format": "opaque"},
+      "name": "display_name",
+      "username": "login_handle",
+      "roles": {"claim": "permissions", "format": "strings"},
+      "groups": {"claim": "memberships", "format": "objects", "id": "key", "label": "title", "account": "handle"}
+    },
+    "classPrefixes": ["cohort-", "course-"],
+    "templatePublisherRoleIds": ["instructor"]
+  }
+}

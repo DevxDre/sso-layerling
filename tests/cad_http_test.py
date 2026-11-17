@@ -16,6 +16,7 @@ import argparse
 ROOT = Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser();parser.add_argument('--php',required=True);parser.add_argument('--layerling',type=Path,required=True);parser.add_argument('--candidate',type=Path)
 parser.add_argument('--mcp-demo', action='store_true', help='Open a local Chromium demo with a synthetic IServ account')
+parser.add_argument('--alternate-profile', action='store_true')
 OPTIONS, remaining=parser.parse_known_args()
 spec=importlib.util.spec_from_file_location('integrated_support',ROOT/'tests/integrated_storage_http_test.py')
 base=importlib.util.module_from_spec(spec);spec.loader.exec_module(base)
@@ -48,6 +49,10 @@ class CadHTTPTest(base.IntegratedStorageTest):
         subprocess.run([OPTIONS.php,'-r',code,str(self.private/'sessions'),client.cookies['SSO_LAYERLING_SESSION'],str(value)],check=True,capture_output=True)
 
     def mcp_rules(self, *, accounts=(), roles=(), groups=(), deny_accounts=(), deny_roles=(), deny_groups=()):
+        roles = [self.provider_role(role) for role in roles]
+        deny_roles = [self.provider_role(role) for role in deny_roles]
+        groups = [self.provider_group(group) for group in groups]
+        deny_groups = [self.provider_group(group) for group in deny_groups]
         path = self.private/'app/mcp-test.json'
         path.write_text(json.dumps({'allow': {'accounts': accounts, 'roles': roles, 'groups': groups},
                                     'deny': {'accounts': deny_accounts, 'roles': deny_roles, 'groups': deny_groups}}))
@@ -142,7 +147,9 @@ class CadHTTPTest(base.IntegratedStorageTest):
             self.assertEqual(a.request(path + '/')[1]['location'], '/')
         redirect = a.request('/')
         self.assertEqual(redirect[0], 303)
-        self.assertTrue(redirect[1]['location'].startswith('https://login.example.invalid/iserv/auth/auth?'))
+        authorize = ('https://identity.example.invalid/workshop/oauth/authorize?' if self.alternate
+                     else 'https://login.example.invalid/iserv/auth/auth?')
+        self.assertTrue(redirect[1]['location'].startswith(authorize))
         callback = self.callback_for_redirect(a, redirect)
         self.assertEqual(a.request(callback)[1]['location'], '/cad.php')
         for path in ['/', '/index.php']:
@@ -166,8 +173,10 @@ class CadHTTPTest(base.IntegratedStorageTest):
         self.assertEqual(a.request('/cad.php')[1]['location'], '/')
 
     def test_account_profile_and_authorized_class_catalogue(self):
-        groups = {'class-a': 'klasse.5a', 'class-b': 'klasse.6b', 'duplicate': 'klasse.5a',
-                  'empty': 'klasse.', 'case': 'Klasse.8c', 'other': 'kurs.9d', 'malformed': ['klasse.7a']}
+        prefix = self.class_prefix
+        second_prefix = 'course-' if self.alternate else prefix
+        groups = {'class-a': prefix+'5a', 'class-b': second_prefix+'6b', 'duplicate': prefix+'5a',
+                  'empty': prefix, 'case': prefix.upper()+'8c', 'other': 'unmapped.9d', 'malformed': [prefix+'7a']}
         student = self.login(groups=list(groups), group_acts=groups,
                              preferred_username='schueler<&', display_name='Test <Schüler>')
         other = self.login(base.U2, display_name=None)
@@ -258,10 +267,10 @@ class CadHTTPTest(base.IntegratedStorageTest):
 
     @unittest.skipUnless(OPTIONS.candidate,'Pass the verified real candidate to exercise Chromium')
     def test_19_browser_real_editor(self):
-        a=self.login(groups=['cad-class'], group_acts={'cad-class': 'klasse.5a'}, display_name='Änne Muster')
-        b=self.login(base.U2, groups=['cad-class'], group_acts={'cad-class': 'klasse.5a'}, display_name='Änne Muster')
+        a=self.login(groups=['cad-class'], group_acts={'cad-class': self.class_prefix+'5a'}, display_name='Änne Muster')
+        b=self.login(base.U2, groups=['cad-class'], group_acts={'cad-class': self.class_prefix+'5a'}, display_name='Änne Muster')
         unnamed=self.login('55555555-5555-5555-5555-555555555555', groups=['other-class'],
-                           group_acts={'other-class': 'klasse.6b'}, display_name=None)
+                           group_acts={'other-class': self.class_prefix+'6b'}, display_name=None)
         teacher=self.login('66666666-6666-6666-6666-666666666666', ['ROLE_TEACHER'], ['cad-class'], display_name='Änne Lehrkraft')
         maker = self.login(base.UM, ['ROLE_TEACHER'], [base.MAKER])
         admin = self.login(base.UA, ['ROLE_TEACHER'], [base.ADMIN])

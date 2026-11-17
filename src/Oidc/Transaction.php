@@ -30,7 +30,7 @@ final class Transaction
             self::random(),
             self::random(),
             $now,
-            Config::ISSUER,
+            $config->profile->issuer,
             $config->redirectUri,
             in_array($entry, self::ENTRIES, true) === true ? $entry : 'site',
             $target

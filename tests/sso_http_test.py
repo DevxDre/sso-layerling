@@ -67,8 +67,11 @@ class SsoHTTPTest(unittest.TestCase):
         require %s;
         \\Sso\\Layerling\\Oidc\\Web::headers();
         set_exception_handler(static function(\\Throwable $e):void{http_response_code(503);echo 'Login not completed';});
-        return new \\Sso\\Layerling\\Oidc\\Web(%s,new \\Sso\\Layerling\\Oidc\\Config('test-client',str_repeat('s',32)),new \\Sso\\Layerling\\Tests\\FakeProvider(%s),%s);
-        """%(phpstr(cls.private/'app/vendor/autoload.php'),phpstr(ROOT/'tests/FakeProvider.php'),phpstr(cls.private),phpstr(cls.root),phpstr(cls.origin))
+        $profile = \\Sso\\Layerling\\Oidc\\Profile::load(%s);
+        $config = new \\Sso\\Layerling\\Oidc\\Config('test-client',str_repeat('s',32),$profile);
+        return new \\Sso\\Layerling\\Oidc\\Web(%s,$config,new \\Sso\\Layerling\\Tests\\FakeProvider(%s,$config),%s);
+        """%(phpstr(cls.private/'app/vendor/autoload.php'),phpstr(ROOT/'tests/FakeProvider.php'),
+              phpstr(cls.private/'app/oidc-profile.json'),phpstr(cls.private),phpstr(cls.root),phpstr(cls.origin))
         (cls.runtime/'public/_sso.php').write_text(bootstrap)
         cls.log=open(cls.root/'server.log','w+');cls.addClassCleanup(cls.log.close)
         env=dict(os.environ);env['PHP_CLI_SERVER_WORKERS']='4'
@@ -135,13 +138,13 @@ class SsoHTTPTest(unittest.TestCase):
         old=self.client.cookies['SSO_LAYERLING_LOGIN']
         self.assertEqual(self.client.request(cb)[0],303)
         sid=self.client.cookies['SSO_LAYERLING_SSO_TEST'];self.assertNotEqual(sid,old)
-        _,r=self.page();self.assertIn('IServ-Anmeldung erfolgreich'.encode(),r[2])
+        _,r=self.page();self.assertIn('Anmeldung über IServ erfolgreich'.encode(),r[2])
         self.assertIn(b'maker-fixture',r[2]);self.assertNotIn(b'Private unrelated group',r[2]);self.assertNotIn(b'unrelated-fixture',r[2])
         self.assertEqual(self.client.request('/auth/start.php','POST',{'csrf':csrf})[0],503)
         self.assertEqual(self.client.request('/auth/logout.php','POST',{'csrf':csrf})[0],303)
         self.assertEqual((self.private/'sso-sessions'/('sess_'+sid)).read_bytes(),b'')
         stale=Client(self);stale.cookies={'SSO_LAYERLING_SSO_TEST':sid}
-        self.assertNotIn('IServ-Anmeldung erfolgreich'.encode(),self.page(stale)[1][2])
+        self.assertNotIn('Anmeldung über IServ erfolgreich'.encode(),self.page(stale)[1][2])
         self.assertEqual(self.exchanges(),1)
     def test_05_callback_replay(self):
         cb,_=self.begin();self.assertEqual(self.client.request(cb)[0],303)
@@ -215,7 +218,7 @@ class SsoHTTPTest(unittest.TestCase):
         cb,csrf=self.begin();self.assertEqual(self.client.request(cb)[0],303)
         self.assertEqual(self.client.request('/auth/logout.php')[0],503)
         self.assertEqual(self.client.request('/auth/logout.php','POST',{'csrf':'bad'})[0],503)
-        self.assertIn('IServ-Anmeldung erfolgreich'.encode(),self.page()[1][2])
+        self.assertIn('Anmeldung über IServ erfolgreich'.encode(),self.page()[1][2])
 
     def test_18_form_origin_and_sensitive_response_policies(self):
         # A native browser form POST under no-referrer sends Origin:null. The

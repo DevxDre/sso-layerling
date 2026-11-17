@@ -73,7 +73,7 @@ final class IdTokenVerifier
         }
 
         // Signatur gültig: Claims selbst lesen (Typen wie im Token, nicht die stdClass-Umwandlung der Bibliothek)
-        $claims = Json::object((string)base64_decode(strtr($claimsPart, '-_', '+/'), true))
+        $claims = Json::object((string)base64_decode(strtr($claimsPart, '-_', '+/'), true), preserveObjects: true)
             ?? throw new LoginFailed(LoginFailed::ID_TOKEN_FORMAT, 'claims');
         $this->checkClaims($claims, $nonce, $now);
 
@@ -84,7 +84,7 @@ final class IdTokenVerifier
     {
         $fail = fn(string $claim) => new LoginFailed(LoginFailed::ID_TOKEN_CLAIMS, $claim);
 
-        if (($claims['iss'] ?? null) !== Config::ISSUER) {
+        if (($claims['iss'] ?? null) !== $this->config->profile->issuer) {
             throw $fail('iss');
         }
 
