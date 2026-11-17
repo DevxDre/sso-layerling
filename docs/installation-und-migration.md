@@ -6,7 +6,7 @@ Installationsmarker, Cookies, CSRF-Header, Eigentümerparameter und Browser-Spei
 
 ## Neue Installation
 
-- Private Konfiguration nach [OIDC-Einrichtung](iserv-client-einrichtung.md) und
+- Private Konfiguration nach [OIDC-Einrichtung](oidc-profile.md) und
   [Paketierungsleitfaden](sso-teststand.md) vorbereiten.
 - Die private `.env` verwendet `SSO_LAYERLING_OIDC_CLIENT_ID` und
   `SSO_LAYERLING_OIDC_CLIENT_SECRET`. Secrets nicht in öffentliche Dateien übernehmen.
@@ -20,7 +20,7 @@ Installationsmarker, Cookies, CSRF-Header, Eigentümerparameter und Browser-Spei
 
 Anbieter-, Anwendungs- und Callback-Adresse werden aus der privaten Deployment-Konfiguration
 in das Paket übernommen. Die öffentliche Vorlage enthält ausschließlich Beispieladressen.
-Die freie Zuordnung von Endpunktpfaden, Claims und Anzeigename folgt separat.
+Das [Anbieterprofil](oidc-profile.md) legt Endpunktpfade, Claims und Anzeigename fest.
 
 ## Bestehende Installation
 

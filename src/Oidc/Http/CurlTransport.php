@@ -2,7 +2,7 @@
 
 namespace Sso\Layerling\Oidc\Http;
 
-use Sso\Layerling\Oidc\Config;
+use Sso\Layerling\Oidc\Profile;
 
 /**
  * Produktiver Transport: nur die festen Adressen aus Config, nur HTTPS mit Zertifikats- und Hostprüfung, keine
@@ -10,7 +10,7 @@ use Sso\Layerling\Oidc\Config;
  */
 final class CurlTransport implements Transport
 {
-    public const URLS = [Config::TOKEN_URL, Config::USERINFO_URL, Config::JWKS_URL];
+    public function __construct(private readonly Profile $profile) {}
     public const CONNECT_TIMEOUT = 5;
     public const TIMEOUT = 10;
     public const MAX_BYTES = 1048576;
@@ -25,7 +25,9 @@ final class CurlTransport implements Transport
             }
             $lines[] = $name . ': ' . $value;
         }
-        if (in_array($url, self::URLS, true) === false || in_array($method, ['GET', 'POST'], true) === false) {
+        $allowed = $method === 'POST' ? [$this->profile->endpoint('token')]
+            : [$this->profile->endpoint('userinfo'), $this->profile->endpoint('jwks')];
+        if (!in_array($url, $allowed, true) || !in_array($method, ['GET', 'POST'], true)) {
             throw new TransportException('Adresse oder Methode nicht erlaubt');
         }
         if (function_exists('curl_init') === false) {

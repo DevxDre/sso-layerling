@@ -4,29 +4,26 @@ namespace Sso\Layerling\Oidc;
 
 final class Config
 {
-    public const ISSUER = 'https://login.example.invalid';
-    public const AUTHORIZE_URL = self::ISSUER . '/iserv/auth/auth';
-    public const TOKEN_URL = self::ISSUER . '/iserv/auth/public/token';
-    public const USERINFO_URL = self::ISSUER . '/iserv/auth/userinfo';
-    public const JWKS_URL = self::ISSUER . '/iserv/auth/public/jwk';
     public const ALGORITHMS = ['RS256'];
     public const LEEWAY = 60;
     public const TRANSACTION_TTL = 300;
     public readonly string $redirectUri;
-    public function __construct(public readonly string $clientId, private readonly string $secret)
+    public readonly Profile $profile;
+    public function __construct(public readonly string $clientId, private readonly string $secret, ?Profile $profile = null)
     {
         if (!preg_match('/^[a-zA-Z0-9_-]{1,128}$/D', $clientId)
             || !preg_match('/^[\x21-\x7e]{16,4096}$/D', $secret)) {
             throw new LoginFailed(LoginFailed::CONFIG);
         }
-        $this->redirectUri = 'https://cad.example.invalid/auth/callback.php';
+        $this->profile = $profile ?? Profile::defaults();
+        $this->redirectUri = $this->profile->origin . '/auth/callback.php';
     }
     public function clientSecret(): string { return $this->secret; }
-    public function scope(): string { return 'openid iserv:uuid iserv:groups iserv:roles profile'; }
+    public function scope(): string { return implode(' ', $this->profile->provider['scopes']); }
     public function __debugInfo(): array { return ['clientId' => $this->clientId, 'secret' => '[redacted]']; }
 
     /** Literal dotenv subset. No shell, expansion, eval, include, or external dotenv package. */
-    public static function fromFile(string $path): self
+    public static function fromFile(string $path, ?Profile $profile = null): self
     {
         if (!is_file($path) || is_link($path) || filesize($path) > 16384
             || (fileperms($path) & 0077) !== 0) {
@@ -51,6 +48,6 @@ final class Config
             }
             $values[$m[1]] = $value;
         }
-        return new self($values['SSO_LAYERLING_OIDC_CLIENT_ID'] ?? '', $values['SSO_LAYERLING_OIDC_CLIENT_SECRET'] ?? '');
+        return new self($values['SSO_LAYERLING_OIDC_CLIENT_ID'] ?? '', $values['SSO_LAYERLING_OIDC_CLIENT_SECRET'] ?? '', $profile);
     }
 }

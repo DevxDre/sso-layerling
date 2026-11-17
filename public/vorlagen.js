@@ -16,7 +16,7 @@
     if (response.ok) return response;
     const data = await response.json().catch(() => ({}));
     const messages = {
-      invalid_template_groups: 'Bitte mindestens eine IServ-Gruppe auswählen.',
+      invalid_template_groups: 'Bitte mindestens eine Gruppe auswählen.',
       template_group_not_allowed: 'Diese Gruppe steht nicht mehr zur Auswahl. Bitte die Seite neu laden.',
       invalid_template_file: 'Bitte eine gültige .lyl-Datei wählen.',
       invalid_template_text: 'Bitte Titel und Arbeitsauftrag prüfen.',

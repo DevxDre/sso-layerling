@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 require dirname(__DIR__) . '/vendor/autoload.php';
-use Sso\Layerling\Oidc\{Config,Json,LoginFailed,Transaction,Identity,Claims,Jwks,IdTokenVerifier,OidcClient,LoginContext,PrincipalWriter};
+use Sso\Layerling\Oidc\{Config,Profile,Json,LoginFailed,Transaction,Identity,Claims,Jwks,IdTokenVerifier,OidcClient,LoginContext,PrincipalWriter};
 use Sso\Layerling\Oidc\Http\{Transport,HttpResponse,TransportException,CurlTransport};
 use Firebase\JWT\JWT;
 
@@ -24,7 +24,7 @@ final class Fake implements Transport {
     public function send(string $method, string $url, array $headers = [], ?array $form = null): HttpResponse {
         $this->calls[] = [$method, $url, $form];
         if ($this->broken === 'transport') { throw new TransportException('fixture'); }
-        $body = match($url) { Config::JWKS_URL => ['keys' => $this->keys], Config::TOKEN_URL => $this->tokens, Config::USERINFO_URL => $this->info };
+        $body = match($url) { Profile::defaults()->endpoint('jwks') => ['keys' => $this->keys], Profile::defaults()->endpoint('token') => $this->tokens, Profile::defaults()->endpoint('userinfo') => $this->info };
         return new HttpResponse($this->broken === 'status' ? 500 : 200, [], $this->broken === 'json' ? '[]' : json_encode($body, JSON_THROW_ON_ERROR));
     }
 }
@@ -34,12 +34,12 @@ $details = openssl_pkey_get_details($key);
 $jwk = ['kty'=>'RSA','use'=>'sig','alg'=>'RS256','kid'=>'fixture-key','n'=>Transaction::base64url($details['rsa']['n']),'e'=>Transaction::base64url($details['rsa']['e'])];
 $config = new Config('test-client', str_repeat('s', 32));
 $now = time();
-$base = ['iss'=>Config::ISSUER,'aud'=>'test-client','sub'=>'pairwise-test-sub','nonce'=>'nonce', 'iat'=>$now,'exp'=>$now+3600,
+$base = ['iss'=>Profile::defaults()->issuer,'aud'=>'test-client','sub'=>'pairwise-test-sub','nonce'=>'nonce', 'iat'=>$now,'exp'=>$now+3600,
  'iserv:uuid'=>'12345678-1234-1234-1234-123456789abc','iserv:roles'=>[['id'=>'ROLE_STUDENT']],
  'iserv:groups'=>['student-fixture'=>['id'=>'student-fixture','name'=>'Students']], 'name'=>'Fixture'];
 $verify = static function(array $claims, array $header = [], ?string $signingKey = null, ?array $keys = null) use($config,$now,$privateKey,$jwk) {
  $token = signToken($claims, $signingKey ?? $privateKey, 'RS256', $header['kid'] ?? 'fixture-key', $header);
- return (new IdTokenVerifier($config,new Jwks(new Fake($keys ?? [$jwk]))))->verify($token,'nonce',$now);
+ return (new IdTokenVerifier($config,new Jwks(new Fake($keys ?? [$jwk]), $config->profile)))->verify($token,'nonce',$now);
 };
 test('valid signature and exact claims',fn()=>check($verify($base)['sub']===$base['sub']));
 foreach ([['iss','https://evil.invalid'],['aud','other'],['aud',['test-client',7]],['aud',[]],['aud',['test-client','other']],['azp','other'],['exp',$now-61],['exp',(string)($now+100)],['iat',$now+61],['iat','bad'],['nbf',$now+61],['nbf','bad'],['sub',''],['nonce','wrong']] as $i=>[$claim,$value]) {
@@ -52,9 +52,9 @@ test('unknown kid',fn()=>rejects(fn()=>$verify($base,['kid'=>'unknown'])));
 test('duplicate key id',fn()=>rejects(fn()=>$verify($base,[],null,[$jwk,$jwk])));
 foreach (['d'=>'private','p'=>'private','kty'=>'oct','use'=>'enc','alg'=>'HS256'] as $h=>$v) { test('JWK filter '.$h,fn()=>check(Jwks::filter(['keys'=>[array_replace($jwk,[$h=>$v])]])===[])); }
 test('wrong signature',function()use($verify,$base){$k=openssl_pkey_new(['private_key_bits'=>2048]);openssl_pkey_export($k,$pem);rejects(fn()=>$verify($base,[],$pem));});
-test('none algorithm and malformed token',function()use($config,$jwk,$now){foreach(['e30.e30.xxx','not-a-token',Transaction::base64url('{"alg":"none","kid":"fixture-key"}').'.e30.xxx']as$t){rejects(fn()=>(new IdTokenVerifier($config,new Jwks(new Fake([$jwk]))))->verify($t,'nonce',$now));}});
+test('none algorithm and malformed token',function()use($config,$jwk,$now){foreach(['e30.e30.xxx','not-a-token',Transaction::base64url('{"alg":"none","kid":"fixture-key"}').'.e30.xxx']as$t){rejects(fn()=>(new IdTokenVerifier($config,new Jwks(new Fake([$jwk]), $config->profile)))->verify($t,'nonce',$now));}});
 test('JWT globals restored after failure',function()use($verify,$base){JWT::$leeway=13;JWT::$timestamp=42;rejects(fn()=>$verify(array_replace($base,['nonce'=>'wrong'])));check(JWT::$leeway===13&&JWT::$timestamp===42);JWT::$leeway=0;JWT::$timestamp=null;});
-$identity = static fn(array $c)=>new Identity(Config::ISSUER,$c['sub'],$c,$c,'site','/');
+$identity = static fn(array $c)=>new Identity(Profile::defaults()->issuer,$c['sub'],$c,$c,'site','/');
 test('roles objects and groups normalized',function()use($identity,$base){$c=Claims::from($identity($base));check($c->roles===['ROLE_STUDENT']&&$c->groups===['student-fixture']&&$c->student([],'ROLE_STUDENT'));});
 test('missing roles group fallback',function()use($identity,$base){$b=$base;unset($b['iserv:roles']);check(Claims::from($identity($b))->student(['student-fixture'],'ROLE_STUDENT'));});
 test('empty roles group fallback',fn()=>check(Claims::from($identity(array_replace($base,['iserv:roles'=>[]])))->student(['student-fixture'],'ROLE_STUDENT')));
@@ -69,7 +69,7 @@ test('complete PKCE flow with opaque access token',function()use($config,$jwk,$t
 foreach(['sub'=>'other','iserv:uuid'=>'22345678-1234-1234-1234-123456789abc','iserv:roles'=>[],'aud'=>'other']as$h=>$v){test('UserInfo binding '.$h,fn()=>rejects(fn()=>(new OidcClient($config,new Fake([$jwk],$tokens,array_replace($claims,[$h=>$v])),fn()=>$now))->complete($tx,'code')));}
 test('at_hash correct and incorrect',function()use($config,$jwk,$tokens,$claims,$tx,$now,$privateKey){foreach([true,false]as$good){$c=$claims;$c['at_hash']=$good?Transaction::base64url(substr(hash('sha256',$tokens['access_token'],true),0,16)):'wrong';$t=$tokens;$t['id_token']=signToken($c,$privateKey,'RS256','fixture-key');$fn=fn()=>(new OidcClient($config,new Fake([$jwk],$t,$claims),fn()=>$now))->complete($tx,'code');if($good){check($fn()instanceof Identity);}else{rejects($fn);}}});
 foreach(['transport','status','json']as$broken){test('provider failure '.$broken,fn()=>rejects(fn()=>(new OidcClient($config,new Fake([$jwk],$tokens,$claims,$broken),fn()=>$now))->complete($tx,'code')));}
-test('transport refuses arbitrary endpoint',fn()=>rejects(fn()=>(new CurlTransport())->send('GET','http://127.0.0.1')));
+test('transport refuses arbitrary endpoint',fn()=>rejects(fn()=>(new CurlTransport(Profile::defaults()))->send('GET','http://127.0.0.1')));
 $tmp=sys_get_temp_dir().'/sso-oidc-'.bin2hex(random_bytes(8));mkdir($tmp,0700);mkdir($tmp.'/contexts',0700);
 try {
  file_put_contents($tmp.'/principals.json','{}');touch($tmp.'/authorization.lock');

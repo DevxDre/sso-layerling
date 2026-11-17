@@ -38,7 +38,7 @@ class SsoStorageHTTPTest(storage.StorageHTTPTest):
         require $argv[1];
         try {
             $data=json_decode($argv[3],true,32,JSON_THROW_ON_ERROR);
-            $identity=new \Sso\Layerling\Oidc\Identity(\Sso\Layerling\Oidc\Config::ISSUER,$data['sub'],$data,$data,'site','/');
+            $identity=new \Sso\Layerling\Oidc\Identity(\Sso\Layerling\Oidc\Profile::defaults()->issuer,$data['sub'],$data,$data,'site','/');
             $claims=\Sso\Layerling\Oidc\Claims::from($identity);
             $owner=(new \Sso\Layerling\Oidc\PrincipalWriter($argv[2]))->write($claims,(int)$argv[4],(int)$argv[5],['test-student-id'],'ROLE_STUDENT');
             echo $owner;

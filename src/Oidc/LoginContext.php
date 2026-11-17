@@ -61,7 +61,7 @@ final class LoginContext
         $tx = Transaction::fromArray($this->data['transaction'] ?? null);
         if (($this->data['status'] ?? '') !== 'pending' || !$tx || !is_string($state)
             || !hash_equals($tx->state, $state) || $tx->expired($now)
-            || $tx->issuer !== Config::ISSUER || $tx->redirectUri !== $config->redirectUri) {
+            || $tx->issuer !== $config->profile->issuer || $tx->redirectUri !== $config->redirectUri) {
             throw new LoginFailed(LoginFailed::TRANSACTION);
         }
         $this->data['status'] = 'processing';

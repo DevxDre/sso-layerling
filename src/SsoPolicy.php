@@ -26,8 +26,9 @@ final class SsoPolicy
         $maker=$config['groupIds']['makerspace']??null;
         if($maker!==null&&$maker===($config['groupIds']['admins']??null)){Gateway::fail(503,'invalid_configuration');}
         $studentRole=$config['studentRoleId']??null;
-        if(($studentRole!==null&&(!is_string($studentRole)||!preg_match('/^[A-Za-z0-9_.:-]{1,100}$/D',$studentRole)))
-            || !self::ids($config['studentGroupIds']??null)){Gateway::fail(503,'invalid_configuration');}
+        if (($studentRole !== null && !StorageConfig::roleId($studentRole))
+            || !self::ids($config['studentGroupIds'] ?? null)
+            || (array_key_exists('templatePublisherRoleIds', $config) && !StorageConfig::roleIds($config['templatePublisherRoleIds']))){Gateway::fail(503,'invalid_configuration');}
     }
     private static function id(mixed $id): bool {return is_string($id)&&preg_match('/^[A-Za-z0-9_-]{1,128}$/D',$id)===1;}
     private static function ids(mixed $ids): bool
@@ -44,17 +45,21 @@ final class SsoPolicy
             ||!is_int($r['loginSequence']??null)||$r['loginSequence']<1
             ||!is_int($r['checkedAt']??null)||$r['checkedAt']<1||$r['checkedAt']>time()
             ||!self::ids($r['groups']??null)
-            ||!is_array($r['roles']??null)||!array_is_list($r['roles'])||count($r['roles'])>100){return null;}
-        foreach($r['roles']as$role){
-            if(!is_string($role)||!preg_match('/^[A-Za-z0-9_.:-]{1,100}$/D',$role)){return null;}
+            || !StorageConfig::roleIds($r['roles'] ?? null)
+            || (isset($r['authorizationMapping']) && !StorageConfig::mappingId($r['authorizationMapping']))) { return null; }
+        if ($r['student']) {
+            $basis = $r['studentBasis'] ?? $this->config['legacyStudentBasis'] ?? [
+                'role' => $this->config['studentRoleId'] ?? null, 'groups' => $this->config['studentGroupIds'],
+            ];
+            if (!is_array($basis) || !self::ids($basis['groups'] ?? null)
+                || (isset($basis['role']) && !StorageConfig::roleId($basis['role']))) { return null; }
+            $byRole = $r['roles'] !== [] && isset($basis['role']) && $r['roles'] === [$basis['role']];
+            $byGroup = $r['roles'] === [] && array_intersect($r['groups'], $basis['groups']) !== [];
+            if (!$byRole && !$byGroup) { return null; }
         }
-        // Stored classification is the issuer's decision, never derived from a request.
-        // Reject contradictory true classifications as well as malformed records.
-        if($r['student']){
-            $byRole=$r['roles']!==[]&&($this->config['studentRoleId']??null)!==null
-                &&$r['roles']===[$this->config['studentRoleId']];
-            $byGroup=$r['roles']===[]&&array_intersect($r['groups'],$this->config['studentGroupIds'])!==[];
-            if(!$byRole&&!$byGroup){return null;}
+        // Normalization changes require a new login before roles/groups can grant current privileges.
+        if (($r['authorizationMapping'] ?? null) !== ($this->config['authorizationMapping'] ?? null)) {
+            $r['roles'] = $r['groups'] = [];
         }
         return $r;
     }
@@ -62,12 +67,18 @@ final class SsoPolicy
     {
         if(($this->record($actor)['enabled']??null)!==true){Gateway::fail(403,'access_denied');}
     }
+    public static function canPublishTemplates(array $roles, array $config): bool
+    {
+        $publishers = $config['templatePublisherRoleIds'] ?? [];
+        return array_intersect($roles, $publishers) !== [];
+    }
+
     public function templateAccess(string $actor): array
     {
         $this->requireActor($actor);
         $record = $this->record($actor);
         return [
-            'teacher' => in_array('ROLE_TEACHER', $record['roles'], true),
+            'teacher' => self::canPublishTemplates($record['roles'], $this->config),
             'student' => $record['student'],
             'groups' => $record['groups'],
         ];

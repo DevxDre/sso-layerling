@@ -203,17 +203,49 @@ try {
     }
     demand($existing === [] || isset($existing['.sso-layerling-sso-test']), 'Unmanaged website refused');
     require $package.'/private/app/vendor/autoload.php';
-    $config=\Sso\Layerling\Oidc\Config::fromFile($base.'/.env');
+    $profile = \Sso\Layerling\Oidc\Profile::load($package.'/private/app/oidc-profile.json');
+    $config = \Sso\Layerling\Oidc\Config::fromFile($base.'/.env', $profile);
     $target=jsonFile($package.'/private/app/deployment-target.json');
     $expectedClient=$target['clientId']??null;
     demand(is_string($expectedClient) && (
         ($expectedClient==='' && isset($options['local-test']))
         || ($expectedClient!=='' && $expectedClient!=='test-client' && hash_equals($expectedClient,$config->clientId))
     ),'Wrong registered client');
+    $identityContract = $profile->identityContract();
+    if ($identityContract[1] === 'sub') {
+        // A different client registration may get a different pairwise subject.
+        $identityContract[] = $config->clientId;
+    }
+    $previousContract = $previous['oidcIdentity'] ?? null;
+    $legacyStudentBasis = $previous['legacyStudentBasis'] ?? null;
+    if ($previousContract === null && is_dir($app)) {
+        // Packages before profiles embedded the issuer in the private Config source.
+        $legacy = $app.'/src/Oidc/Config.php';
+        demand(is_file($legacy) && !is_link($legacy) && filesize($legacy) <= 16384
+            && preg_match("/public const ISSUER = '([^']+)';/", (string) file_get_contents($legacy), $match) === 1,
+            'Cannot verify previous identity binding');
+        $legacyProfile = \Sso\Layerling\Oidc\Profile::defaults();
+        $previousContract = [$match[1], ...array_slice($legacyProfile->identityContract(), 1)];
+        if (is_file($app.'/storage.json')) {
+            $legacyStorage = jsonFile($app.'/storage.json');
+            $legacyStudentBasis = ['role' => $legacyStorage['studentRoleId'], 'groups' => $legacyStorage['studentGroupIds']];
+        }
+    }
+    $registry = $base.'/private/principals.json';
+    if ($previousContract === null && is_file($registry)) {
+        demand(jsonFile($registry) === [], 'Existing principals require an explicit identity migration');
+    }
+    demand($previousContract === null || $previousContract === $identityContract,
+        'Changing issuer or identity mapping requires an explicit migration');
     if ($storageTest) {
         foreach (['zip','mbstring','fileinfo'] as $extension) { demand(extension_loaded($extension),'Missing storage PHP extension'); }
         $storage=\Sso\Layerling\StorageConfig::load($package.'/private/app/storage.json');
-        demand($storage->values['publicRoot']===$public && $storage->values['origin']==='https://cad.example.invalid','Wrong storage target');
+        demand($storage->values['publicRoot']===$public && $storage->values['origin']===$profile->origin,'Wrong storage target');
+        demand($storage->values['studentRoleId'] === $profile->studentRoleId
+            && $storage->values['studentGroupIds'] === $profile->studentGroupIds
+            && ($storage->values['authorizationMapping'] ?? null) === $profile->authorizationMapping()
+            && ($storage->values['templatePublisherRoleIds'] ?? null) === $profile->provider['templatePublisherRoleIds'],
+            'Inconsistent OIDC authorization configuration');
         $pin=json_decode(file_get_contents($package.'/private/app/upstream.lock.json'),true,16,JSON_THROW_ON_ERROR);
         demand(is_string($pin['sha256']??null) && hash_equals($pin['sha256'],hash_file('sha256',$package.'/private/app/upstream/store.php')),'Upstream integrity mismatch');
     }
@@ -250,7 +282,8 @@ try {
     ksort($packagePublic);
     try {
         demand(file_put_contents($metadata, json_encode(['sourceCommit'=>$manifest['sourceCommit'],
-            'installedAt'=>gmdate(DATE_ATOM), 'kind'=>$manifest['kind'], 'publicFiles'=>$packagePublic],
+            'installedAt'=>gmdate(DATE_ATOM), 'kind'=>$manifest['kind'], 'publicFiles'=>$packagePublic,
+            'oidcIdentity'=>$identityContract, 'legacyStudentBasis'=>$legacyStudentBasis],
             JSON_THROW_ON_ERROR)) !== false, 'Cannot prepare deployment metadata');
         foreach ($staticFiles as $file) {
             parentDirectories($public, $file);

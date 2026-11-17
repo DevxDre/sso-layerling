@@ -50,6 +50,43 @@ class StorageInstallTest(unittest.TestCase):
         for change in [{'studentRoleId':'ROLE_TEACHER'},{'publicRoot':'/wrong'}]:
             values=json.loads(original);values.update(change);f.write_text(json.dumps(values));self.refresh_hash(path)
             self.assertNotEqual(self.install().returncode,0);self.assertFalse((self.base/'private/app').exists())
+    def test_legacy_profile_upgrade_preserves_runtime_and_refuses_new_identity(self):
+        result = self.install()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        private = self.base/'private'
+        metadata = private/'deployment.json'
+        previous = json.loads(metadata.read_text())
+        previous.pop('oidcIdentity')
+        previous.pop('legacyStudentBasis')
+        metadata.write_text(json.dumps(previous))
+        # Pre-profile releases embedded the issuer in the private PHP source.
+        (private/'app/src/Oidc/Config.php').write_text("<?php class Config { public const ISSUER = 'https://login.example.invalid'; }")
+        for name in ['projects', 'templates']:
+            directory = private/name
+            directory.mkdir(exist_ok=True)
+            (directory/'keep').write_text(name)
+
+        before = (private/'principals.json').read_bytes()
+        result = self.install()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        installed = json.loads(metadata.read_text())
+        self.assertEqual(installed['oidcIdentity'], ['https://login.example.invalid', 'iserv:uuid', 'uuid'])
+        self.assertEqual(installed['legacyStudentBasis'], {'role': 'ROLE_STUDENT', 'groups': []})
+        self.assertEqual((private/'principals.json').read_bytes(), before)
+        for name in ['projects', 'templates']:
+            self.assertEqual((private/name/'keep').read_text(), name)
+
+        relative = 'private/app/oidc-profile.json'
+        profile = self.artifact/relative
+        changed = json.loads(profile.read_text())
+        changed['provider']['claims']['identity'] = {'claim': 'sub', 'format': 'opaque'}
+        profile.write_text(json.dumps(changed))
+        self.refresh_hash(relative)
+        result = self.install()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('requires an explicit migration', result.stderr)
+        self.assertEqual(json.loads(metadata.read_text()), installed)
+        self.assertEqual((private/'principals.json').read_bytes(), before)
     def test_06_cleanup_removes_only_expired_native_context_files(self):
         self.assertEqual(self.install().returncode,0)
         root=self.base/'private';old=root/'sessions'/('sess_'+'a'*64);fresh=root/'sessions'/('sess_'+'b'*64)

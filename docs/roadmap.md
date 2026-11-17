@@ -1,33 +1,10 @@
 # Roadmap
 
-Die folgenden Punkte sind geplant und beschreiben noch keine vollständig vorhandenen
-Funktionen. Anbieter-, Anwendungs- und Callback-Adressen werden bereits beim Paketbau aus
-privater Konfiguration übernommen. Die übrige Anbieterbindung wird schrittweise aufgelöst.
+## OIDC-Generalisierung
 
-## OIDC-Anbindung je Deployment konfigurieren
-
-- Anzeigename des Anmeldeservers und zugehörige Oberflächentexte konfigurieren.
-- Anbieterabhängige OIDC-Endpunktpfade aus dem festen Anwendungscode lösen.
-- Identitäts-, Anzeigenamen-, Benutzerkennungs-, Rollen- und Gruppen-Claims zuordnen und
-  unterschiedliche Claim-Strukturen in ein einheitliches internes Modell normalisieren.
-- Die bestehende Anbindung als geprüftes Anbieterprofil erhalten.
-
-## Rollen, Gruppen und Klassen generalisieren
-
-- Fachliche Funktionen wie Schülerzuordnung, Vorlagenveröffentlichung, Betreuung und
-  Admin-Dateirechte über explizite Konfiguration an Anbieterrollen und Gruppenkennungen binden.
-- Fest eingetragene Rollenmarker und Gruppenbezeichnungen aus fachlichen Entscheidungen
-  und Diagnosefiltern entfernen. Anzeigenamen dürfen weiterhin keine Rechte verleihen.
-- Klassen- und Kurszuordnung konfigurierbar machen, einschließlich des aktuell fest
-  ausgewerteten Gruppenaccount-Präfixes `klasse.`.
-- Fachliche Begriffe der Oberfläche und Bezeichnungen von Berechtigungsgruppen getrennt halten.
-- Suchfilter in Diagnose-/Metadatenwerkzeugen aus Konfiguration beziehen oder historische
-  Werkzeuge entsprechend kennzeichnen. Daraus entsteht keine neue IDM-/LDAP-Laufzeitverbindung.
-
-Die überprüften Benutzer-, Gruppen- und Klassennamen im aktuellen Projektstand sind als
-unproblematisch bestätigt und dürfen bestehen bleiben. Ihre Verwendung als Testdaten ist
-kein offener Bereinigungspunkt. Generalisiert werden die Annahmen im Anwendungscode;
-Tests behalten nachvollziehbare, synthetische Fixtures.
+Die [Profilkonfiguration](oidc-profile.md) setzt die Anbieter-, Rollen-, Gruppen- und
+Klassenzuordnung pro Deployment um. IServ bleibt das kompatible Standardprofil.
+Der Abnahmevertrag für Änderungen an der Profilkonfiguration steht unten.
 
 ## Abnahme der Generalisierung
 

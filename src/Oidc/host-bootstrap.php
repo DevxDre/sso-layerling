@@ -15,6 +15,15 @@ umask(0077);
 $private = dirname(__DIR__, 3);
 $storagePath = dirname(__DIR__, 2) . '/storage.json';
 $storage = is_file($storagePath) ? \Sso\Layerling\StorageConfig::load($storagePath) : null;
-return new \Sso\Layerling\Oidc\Web($private,
-    \Sso\Layerling\Oidc\Config::fromFile(dirname($private) . '/.env'),
-    new \Sso\Layerling\Oidc\Http\CurlTransport(), 'https://cad.example.invalid', $storage);
+$profile = \Sso\Layerling\Oidc\Profile::load(dirname(__DIR__, 2) . '/oidc-profile.json');
+$config = \Sso\Layerling\Oidc\Config::fromFile(dirname($private) . '/.env', $profile);
+$targetPath = dirname(__DIR__, 2) . '/deployment-target.json';
+$target = !is_link($targetPath) && is_file($targetPath) && filesize($targetPath) <= 16384
+    ? \Sso\Layerling\Oidc\Json::object((string) file_get_contents($targetPath))
+    : null;
+$expectedClient = $target['clientId'] ?? null;
+if (!is_string($expectedClient) || ($expectedClient !== '' && !hash_equals($expectedClient, $config->clientId))) {
+    throw new \Sso\Layerling\Oidc\LoginFailed(\Sso\Layerling\Oidc\LoginFailed::CONFIG);
+}
+return new \Sso\Layerling\Oidc\Web($private, $config,
+    new \Sso\Layerling\Oidc\Http\CurlTransport($profile), $profile->origin, $storage);

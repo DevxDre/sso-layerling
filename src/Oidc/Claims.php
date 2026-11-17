@@ -2,67 +2,115 @@
 declare(strict_types=1);
 namespace Sso\Layerling\Oidc;
 
-/** Normalized token-free claims. Group labels are for manual diagnosis only. */
+/** Normalized token-free claims. Labels and class names are presentation data. */
 final class Claims
 {
-    public function __construct(public readonly string $uuid, public readonly array $roles,
-        public readonly array $groups, public readonly array $groupLabels, public readonly ?string $name,
-        public readonly ?string $preferredUsername, public readonly array $classes) {}
-    public static function from(Identity $identity): self
+    public function __construct(
+        public readonly string $issuer,
+        public readonly string $externalId,
+        public readonly array $roles,
+        public readonly array $groups,
+        public readonly array $groupLabels,
+        public readonly ?string $name,
+        public readonly ?string $preferredUsername,
+        public readonly array $classes,
+    ) {}
+
+    public static function from(Identity $identity, ?Profile $profile = null): self
     {
+        $profile ??= Profile::defaults();
         $c = $identity->userinfo + $identity->idToken;
-        $uuid = $c['iserv:uuid'] ?? null;
-        if (!is_string($uuid) || !preg_match('/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/Di', $uuid)) {
-            throw new LoginFailed(LoginFailed::CLAIMS, 'uuid');
+        $mapping = $profile->provider['claims'];
+        $binding = $mapping['identity'];
+        $externalId = $binding['claim'] === 'sub' ? $identity->subject : ($c[$binding['claim']] ?? null);
+        $pattern = $binding['format'] === 'uuid'
+            ? '/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/Di'
+            : '/^[\x21-\x7e]{1,255}$/D';
+        if (!is_string($externalId) || !preg_match($pattern, $externalId)) {
+            throw new LoginFailed(LoginFailed::CLAIMS, 'identity');
         }
-        $roles = array_key_exists('iserv:roles', $c) ? $c['iserv:roles'] : [];
-        if (!is_array($roles) || !array_is_list($roles) || count($roles) > 100) { throw new LoginFailed(LoginFailed::CLAIMS, 'roles'); }
-        $ids = [];
-        foreach ($roles as $role) {
-            $id = is_array($role) ? ($role['id'] ?? null) : null;
-            if (!is_string($id) || !preg_match('/^[A-Za-z0-9_.:-]{1,100}$/D', $id)) { throw new LoginFailed(LoginFailed::CLAIMS, 'roles'); }
-            $ids[] = $id;
+        if ($binding['format'] === 'uuid') {
+            $externalId = strtolower($externalId);
         }
-        $groups = array_key_exists('iserv:groups', $c) ? $c['iserv:groups'] : [];
-        if (!is_array($groups) || ($groups !== [] && array_is_list($groups)) || count($groups) > 128) {
-            throw new LoginFailed(LoginFailed::CLAIMS, 'groups');
+
+        $roles = [];
+        foreach (self::collection($c, $mapping['roles'], 100, 'roles') as $value) {
+            $role = self::identifier($value, $mapping['roles']);
+            if (!is_string($role) || !preg_match('/^[A-Za-z0-9_.:-]{1,100}$/D', $role)) {
+                throw new LoginFailed(LoginFailed::CLAIMS, 'roles');
+            }
+            $roles[] = $role;
         }
-        $labels = [];
-        $classes = [];
-        foreach ($groups as $key => $group) {
-            if (!is_string($key) || !preg_match('/^[A-Za-z0-9_-]{1,128}$/D', $key)
-                || !is_array($group) || ($group['id'] ?? null) !== $key) {
+        $groups = $labels = $classes = [];
+        $groupMapping = $mapping['groups'];
+        foreach (self::collection($c, $groupMapping, 128, 'groups') as $key => $value) {
+            $id = self::identifier($value, $groupMapping);
+            if (!is_string($id) || !preg_match('/^[A-Za-z0-9_-]{1,128}$/D', $id)
+                || ($groupMapping['format'] === 'map' && $key !== $id)
+                || in_array($id, $groups, true)) {
                 throw new LoginFailed(LoginFailed::CLAIMS, 'groups');
             }
-            $labels[$key] = self::text($group['name'] ?? null);
-            $account = self::text($group['act'] ?? null);
-            if ($account !== null && str_starts_with($account, 'klasse.')) {
-                $class = trim(substr($account, strlen('klasse.')));
-                if ($class !== '') { $classes[] = $class; }
+            $groups[] = $id;
+            $fields = (array) $value;
+            $labels[$id] = self::text($fields[$groupMapping['label'] ?? ''] ?? null);
+            $account = self::text($fields[$groupMapping['account'] ?? ''] ?? null);
+            foreach ($profile->provider['classPrefixes'] as $prefix) {
+                if ($account !== null && str_starts_with($account, $prefix)) {
+                    $class = trim(substr($account, strlen($prefix)));
+                    if ($class !== '') { $classes[] = $class; }
+                    break;
+                }
             }
         }
         $classes = array_values(array_unique($classes));
         usort($classes, 'strnatcasecmp');
-        return new self(strtolower($uuid), array_values(array_unique($ids)), array_keys($labels), $labels,
-            self::text($c['name'] ?? null), self::text($c['preferred_username'] ?? null), $classes);
+        return new self($identity->issuer, $externalId, array_values(array_unique($roles)), $groups, $labels,
+            self::text($c[$mapping['name']] ?? null), self::text($c[$mapping['username']] ?? null), $classes);
     }
+
+    private static function collection(array $claims, array $mapping, int $limit, string $kind): array
+    {
+        if (!array_key_exists($mapping['claim'], $claims)) {
+            return [];
+        }
+        $value = $claims[$mapping['claim']];
+        $expectsList = $mapping['format'] !== 'map';
+        if (!$expectsList && $value instanceof \stdClass) {
+            $value = (array) $value;
+        }
+        if (!is_array($value) || count($value) > $limit
+            || ($value !== [] && array_is_list($value) !== $expectsList)) {
+            throw new LoginFailed(LoginFailed::CLAIMS, $kind);
+        }
+        return $value;
+    }
+
+    private static function identifier(mixed $value, array $mapping): mixed
+    {
+        if ($mapping['format'] === 'strings') {
+            return $value;
+        }
+        return (is_array($value) || $value instanceof \stdClass) ? ((array) $value)[$mapping['id']] ?? null : null;
+    }
+
     private static function text(mixed $value): ?string
     {
         return is_string($value) && strlen($value) <= 200 && !preg_match('/[\x00-\x1f\x7f]/', $value) ? $value : null;
     }
+
     public function student(array $configuredGroups, ?string $role): bool
     {
-        // Valid nonempty roles take precedence. No teacher/admin/multiple-role fallback.
+        // Verified nonempty roles take precedence over group fallback.
         if ($this->roles !== []) { return $role !== null && $this->roles === [$role]; }
         return array_intersect($configuredGroups, $this->groups) !== [];
     }
-    /** Only explicitly relevant group labels, never a full profile/group dump. */
-    public function diagnostic(): array
+
+    public function diagnostic(array $groupIds): array
     {
         $result = [];
-        foreach ($this->groupLabels as $id => $name) {
-            if (is_string($name) && in_array(strtolower($name), ['admins', 'makerspace-betreuung'], true)) {
-                $result[] = ['id' => $id, 'name' => $name];
+        foreach ($this->groups as $id) {
+            if (in_array($id, $groupIds, true)) {
+                $result[] = ['id' => $id, 'name' => $this->groupLabels[$id] ?? $id];
             }
         }
         return ['roles' => $this->roles, 'relevantGroups' => $result, 'groupCount' => count($this->groups)];

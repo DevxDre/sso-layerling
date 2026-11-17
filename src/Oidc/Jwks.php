@@ -8,7 +8,7 @@ use Firebase\JWT\Key;
 use Throwable;
 
 /**
- * Schlüsselsatz von IServ, nur von Config::JWKS_URL.
+ * Schlüsselsatz vom konfigurierten JWKS-Endpunkt.
  *
  * Vor JWK::parseKeySet() gefiltert: nur kty RSA, use sig, alg RS256 (IServ setzt alle drei, geprüft 29.10.2026),
  * öffentlicher Schlüssel mit n und e, eindeutige kid. Sonst nähme parseKeySet() auch symmetrische (oct) oder andere
@@ -25,7 +25,7 @@ final class Jwks
     /** @var array<string, Key>|null */
     private array|null $keys = null;
 
-    public function __construct(private \Sso\Layerling\Oidc\Http\Transport $transport) {}
+    public function __construct(private \Sso\Layerling\Oidc\Http\Transport $transport, private Profile $profile) {}
 
     public function key(string $kid): Key
     {
@@ -44,7 +44,7 @@ final class Jwks
     private function fetch(): array
     {
         try {
-            $response = $this->transport->send('GET', Config::JWKS_URL, ['Accept' => 'application/json']);
+            $response = $this->transport->send('GET', $this->profile->endpoint('jwks'), ['Accept' => 'application/json']);
         } catch (TransportException) {
             throw new LoginFailed(LoginFailed::JWKS, 'transport');
         }

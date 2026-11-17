@@ -13,6 +13,7 @@ Alte Entscheidungen bleiben als solche nachvollziehbar.
 ## Entscheidungen
 
 - [0001: SSO-Claims und letzte Schülerzuordnung](0001-sso-claims.md) – bestehende Entscheidung dokumentiert.
+- [0002: OIDC-Profil und stabile Eigentümerbindung je Deployment](0002-oidc-deployment-profile.md).
 
 ## Vorlage
 

@@ -13,7 +13,7 @@ Checkout bleibt dabei unverändert.
 
 ## Funktionen
 
-- **Single Sign-on:** Anmeldung über OpenID Connect mit Authorization Code und PKCE; aktuell mit IServ-Anbindung.
+- **Single Sign-on:** Anmeldung über OpenID Connect mit Authorization Code und PKCE; mit konfigurierbarem Anbieterprofil und IServ-Voreinstellung.
 - **Persönliche Projekte:** serverseitiger Speicher mit Dateiverwaltung und getrennten Benutzerbereichen.
 - **Betreuung:** berechtigte Gruppen können Schülerdateien lesen, herunterladen und bearbeiten.
 - **Administration:** eine gesonderte Gruppe kann zusätzlich Dateien aller registrierten Nutzer löschen.
@@ -27,18 +27,12 @@ Details beschreibt das [Berechtigungsmodell](docs/sso-berechtigungsmodell.md).
 
 ## Einsatzrahmen
 
-Ziel ist die Anbindung eines frei konfigurierbaren OpenID-Connect-Anmeldeservers.
-Anbieter- und Callback-Adressen werden je Deployment privat hinterlegt. Als nächster
-Schritt sollen auch Anzeigename, Endpunktpfade und die Zuordnung von Identitäts-, Rollen-
-und Gruppen-Claims konfigurierbar werden.
-Die Oberfläche soll den konfigurierten Namen verwenden, beispielsweise „Mit Schulportal anmelden“.
-IServ ist dabei eine mögliche Anbindung.
-
-Die öffentliche Fassung enthält ausschließlich reservierte Beispieladressen. Anbieteradresse,
-Anwendungsadresse und Callback werden beim Paketbau aus der privaten Deployment-Konfiguration
-in das private Paket übernommen. IServ-spezifische Endpunktpfade, Claims und Anmeldetexte
-sind noch vorhanden; deren Verallgemeinerung einschließlich des Anzeigenamens folgt separat.
-Installationspfade sind derzeit ebenfalls im Code festgelegt.
+Der Anmeldeserver wird je Deployment konfiguriert. Das Profil bestimmt Anzeigename,
+Endpunktpfade, Scopes und Claim-Zuordnung. Die Oberfläche verwendet den konfigurierten
+Namen, etwa „Mit Schulportal anmelden“. IServ steht als kompatibles Standardprofil
+zur Verfügung. Adressen und fachliche Bindungen gelangen beim Paketbau in die private
+App. Einrichtung und unterstützte Claim-Formate stehen im
+[OIDC-Profil](docs/oidc-profile.md).
 
 Die Anwendung setzt eine Internetverbindung voraus. Auf gemeinsam genutzten Geräten
 sind getrennte Browserprofile vorgesehen. Ein lokaler MCP-Teststand für die Steuerung
@@ -51,7 +45,7 @@ Für den Webbetrieb:
 
 - PHP **8.4** mit `curl`, `fileinfo`, `json`, `mbstring`, `openssl`, `session` und `zip`.
 - HTTPS und private Verzeichnisse außerhalb aller öffentlichen Webverzeichnisse.
-- Ein registrierter OIDC-Client beim Anmeldeserver. Die aktuelle Implementierung benötigt noch die IServ-spezifischen Identitäts-, Rollen- und Gruppen-Claims.
+- Ein registrierter OIDC-Client beim Anmeldeserver mit den zum Profil passenden Scopes und Claims.
 
 Für Entwicklung und Paketbau werden zusätzlich Composer, Python 3 und Git benötigt.
 Der CAD-Build benötigt Node.js, npm und ein benachbartes Layerling-Checkout mit dem in
@@ -61,8 +55,8 @@ verwendet; der Webbetrieb erfolgt mit PHP und statischen Editor-Dateien.
 ## Einstieg für Entwicklung und Betrieb
 
 1. Die [Hostingvoraussetzungen](docs/hosting-pruefung.md) prüfen und einen OIDC-Client
-   registrieren. Für die derzeitige Anbindung beschreibt die
-   [IServ-Einrichtung](docs/iserv-client-einrichtung.md) die benötigten Einstellungen.
+   registrieren. Die [Profilkonfiguration](docs/oidc-profile.md) beschreibt die gemeinsamen
+   Einstellungen. Für IServ gilt die [IServ-Einrichtung](docs/iserv-client-einrichtung.md).
 2. Die PHP-Abhängigkeiten anhand von `composer.lock` installieren:
 
    ```bash
@@ -109,7 +103,7 @@ vorgesehenen Pakettypen verwendet.
 | Thema | Leitfaden |
 |---|---|
 | Geplante Weiterentwicklung | [Roadmap](docs/roadmap.md) |
-| Aktuelle OIDC-Anbindung und private Konfiguration | [Einrichtung für IServ](docs/iserv-client-einrichtung.md) |
+| Aktuelle OIDC-Anbindung und private Konfiguration | [OIDC-Profile](docs/oidc-profile.md), [Einrichtung für IServ](docs/iserv-client-einrichtung.md) |
 | Dateirechte und Rollen | [Berechtigungsmodell](docs/sso-berechtigungsmodell.md) |
 | Tests und Paketbau | [SSO-Teststand](docs/sso-teststand.md) |
 | Statischer CAD-Editor | [CAD-Integration](docs/cad-integration.md) |

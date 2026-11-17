@@ -6,22 +6,19 @@ use Sso\Layerling\Oidc\Http\HttpResponse;
 use Sso\Layerling\Oidc\Http\TransportException;
 
 /**
- * OIDC-Client für IServ: Autorisierungs-Adresse, Code-Tausch (client_secret_post, PKCE), ID-Token-Prüfung und
- * UserInfo – nur über die festen Adressen aus Config und den explizit injizierten Transport.
+ * OIDC-Client: Autorisierungs-Adresse, Code-Tausch (client_secret_post, PKCE), ID-Token-Prüfung und
+ * UserInfo – nur über die konfigurierten Endpunkte und den explizit injizierten Transport.
  * Access Token wird nur für den UserInfo-Abruf benutzt, Refresh Token sofort verworfen; nichts davon wird gespeichert.
  */
 final class OidcClient
 {
-    /** Claims, die in ID-Token und UserInfo übereinstimmen müssen, wenn beide sie enthalten */
-    public const CONSISTENT_CLAIMS = ['iss', 'aud', 'iserv:uuid', 'iserv:roles', 'iserv:groups'];
-
     public function __construct(private Config $config, private \Sso\Layerling\Oidc\Http\Transport $transport, private \Closure $clock)
     {
     }
 
     public function authorizationUrl(Transaction $transaction): string
     {
-        return Config::AUTHORIZE_URL . '?' . http_build_query([
+        return $this->config->profile->endpoint('authorize') . '?' . http_build_query([
             'response_type' => 'code',
             'client_id' => $this->config->clientId,
             'redirect_uri' => $this->config->redirectUri,
@@ -38,7 +35,7 @@ final class OidcClient
     {
         $tokens = $this->exchange($transaction, $code);
         $now = ($this->clock)();
-        $claims = (new IdTokenVerifier($this->config, new Jwks($this->transport)))->verify($tokens['id_token'], $transaction->nonce, $now);
+        $claims = (new IdTokenVerifier($this->config, new Jwks($this->transport, $this->config->profile)))->verify($tokens['id_token'], $transaction->nonce, $now);
         if (array_key_exists('at_hash', $claims)) {
             $expected = rtrim(strtr(base64_encode(substr(hash('sha256', $tokens['access_token'], true), 0, 16)), '+/', '-_'), '=');
             if (!is_string($claims['at_hash']) || !hash_equals($expected, $claims['at_hash'])) {
@@ -47,14 +44,14 @@ final class OidcClient
         }
         $userinfo = $this->userinfo($tokens['access_token'], $claims);
 
-        return new Identity(Config::ISSUER, $claims['sub'], $claims, $userinfo, $transaction->entry, $transaction->target);
+        return new Identity($this->config->profile->issuer, $claims['sub'], $claims, $userinfo, $transaction->entry, $transaction->target);
     }
 
     /** @return array{id_token: string, access_token: string} */
     private function exchange(Transaction $transaction, string $code): array
     {
         try {
-            $response = $this->transport->send('POST', Config::TOKEN_URL, ['Accept' => 'application/json'], [
+            $response = $this->transport->send('POST', $this->config->profile->endpoint('token'), ['Accept' => 'application/json'], [
                 'grant_type' => 'authorization_code',
                 'code' => $code,
                 'redirect_uri' => $transaction->redirectUri,
@@ -90,7 +87,7 @@ final class OidcClient
     private function userinfo(string $accessToken, array $claims): array
     {
         try {
-            $response = $this->transport->send('GET', Config::USERINFO_URL, [
+            $response = $this->transport->send('GET', $this->config->profile->endpoint('userinfo'), [
                 'Accept' => 'application/json',
                 'Authorization' => 'Bearer ' . $accessToken,
             ]);
@@ -100,13 +97,16 @@ final class OidcClient
         if ($response->status !== 200) {
             throw new LoginFailed(LoginFailed::USERINFO, 'status');
         }
-        $userinfo = Json::object($response->body) ?? throw new LoginFailed(LoginFailed::USERINFO, 'json');
+        $userinfo = Json::object($response->body, preserveObjects: true) ?? throw new LoginFailed(LoginFailed::USERINFO, 'json');
 
         if (is_string($userinfo['sub'] ?? null) === false || hash_equals($claims['sub'], $userinfo['sub']) === false) {
             throw new LoginFailed(LoginFailed::USERINFO_MISMATCH, 'sub');
         }
-        foreach (self::CONSISTENT_CLAIMS as $name) {
-            if (array_key_exists($name, $claims) === true && array_key_exists($name, $userinfo) === true && $claims[$name] !== $userinfo[$name]) {
+        // Verified identity and authorization claims must agree when present in both responses.
+        $mapping = $this->config->profile->provider['claims'];
+        $consistent = ['iss', 'aud', $mapping['identity']['claim'], $mapping['roles']['claim'], $mapping['groups']['claim']];
+        foreach ($consistent as $name) {
+            if (array_key_exists($name, $claims) === true && array_key_exists($name, $userinfo) === true && serialize($claims[$name]) !== serialize($userinfo[$name])) {
                 throw new LoginFailed(LoginFailed::USERINFO_MISMATCH, $name);
             }
         }

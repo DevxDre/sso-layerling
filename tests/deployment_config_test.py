@@ -63,10 +63,67 @@ class DeploymentConfigTest(unittest.TestCase):
         result = subprocess.run([options.php, str(installer), '--package='+str(output), '--base='+str(base),
                                  '--public='+str(public), '--local-test'], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        code = r"require $argv[1]; $c=new \Sso\Layerling\Oidc\Config('fixture',str_repeat('s',32)); echo json_encode([\Sso\Layerling\Oidc\Config::ISSUER,$c->redirectUri,\Sso\Layerling\StorageConfig::load($argv[2])->values['origin']]);"
+        code = r"require $argv[1]; $p=\Sso\Layerling\Oidc\Profile::load(dirname($argv[2]).'/oidc-profile.json'); $c=new \Sso\Layerling\Oidc\Config('fixture',str_repeat('s',32),$p); echo json_encode([$p->issuer,$c->redirectUri,\Sso\Layerling\StorageConfig::load($argv[2])->values['origin']]);"
         result = subprocess.run([options.php, '-r', code, str(base/'private/app/vendor/autoload.php'),
                                  str(base/'private/app/storage.json')], capture_output=True, text=True, check=True)
         self.assertEqual(json.loads(result.stdout), [self.values['issuer'], self.values['redirectUri'], self.values['origin']])
+
+    def test_subject_binding_refuses_a_new_client_registration(self):
+        self.values = json.loads((ROOT/'tests/oidc-alternate.json').read_text())
+        base, public = self.root/'base', self.root/'www'
+        base.mkdir()
+        public.mkdir()
+        env = base/'.env'
+
+        def install(name, client):
+            self.values['clientId'] = client
+            self.save()
+            env.write_text('SSO_LAYERLING_OIDC_CLIENT_ID=' + client +
+                           '\nSSO_LAYERLING_OIDC_CLIENT_SECRET=synthetic-secret-not-real\n')
+            env.chmod(0o600)
+            artifact = package.package(self.root/name, str(base/'private'), options.layerling, str(public),
+                                       deployment_config_path=self.config)
+            manifest_file = artifact/'manifest.json'
+            manifest = json.loads(manifest_file.read_text())
+            manifest['sourceCommit'] = 'a'*40
+            manifest_file.write_text(json.dumps(manifest))
+            return subprocess.run([options.php, str(artifact/'private/app/scripts/install-sso-test.php'),
+                                   '--package='+str(artifact), '--base='+str(base), '--public='+str(public),
+                                   '--local-test'], capture_output=True, text=True)
+
+        first = install('first', 'fixture-client-a')
+        self.assertEqual(first.returncode, 0, first.stderr)
+        metadata = base/'private/deployment.json'
+        earlier = metadata.read_bytes()
+        self.assertEqual(json.loads(earlier)['oidcIdentity'][-1], 'fixture-client-a')
+        second = install('second', 'fixture-client-b')
+        self.assertNotEqual(second.returncode, 0)
+        self.assertIn('requires an explicit migration', second.stderr)
+        self.assertEqual(metadata.read_bytes(), earlier)
+        script = r"""$_SERVER=['HTTP_HOST'=>'workshop.example.invalid','HTTPS'=>'on','DOCUMENT_ROOT'=>$argv[1],'REQUEST_URI'=>'/','REQUEST_METHOD'=>'GET']; try {require $argv[1].'/index.php';} catch (\Sso\Layerling\Oidc\LoginFailed $error) {echo 'Client configuration rejected';}"""
+        bootstrap = subprocess.run([options.php, '-r', script, str(public)], capture_output=True, text=True, check=True)
+        self.assertEqual(bootstrap.stdout, 'Client configuration rejected')
+
+    def test_invalid_provider_mappings_are_refused_before_output(self):
+        fixture = json.loads((ROOT/'tests/oidc-alternate.json').read_text())
+        for keys, bad_value in [
+            (('endpoints', 'token'), '//other.example.invalid/token'),
+            (('scopes',), ['profile']),
+            (('templatePublisherRoleIds',), ['instructor', None]),
+            (('claims', 'identity', 'claim'), 'aud'),
+            (('claims', 'groups', 'id'), None),
+            (('classPrefixes',), ['']),
+        ]:
+            with self.subTest(keys=keys):
+                self.values = json.loads(json.dumps(fixture))
+                target = self.values['provider']
+                for key in keys[:-1]:
+                    target = target[key]
+                target[keys[-1]] = bad_value
+                self.save()
+                with self.assertRaises(ValueError):
+                    package.package(self.root/'refused', deployment_config_path=self.config)
+                self.assertFalse((self.root/'refused').exists())
 
     def test_invalid_private_addresses_are_refused_before_output(self):
         for changes in [{'issuer':'http://identity.example.invalid'},
