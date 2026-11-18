@@ -14,6 +14,7 @@ final class Claims
         public readonly ?string $name,
         public readonly ?string $preferredUsername,
         public readonly array $classes,
+        public readonly array $groupAccounts = [],
     ) {}
 
     public static function from(Identity $identity, ?Profile $profile = null): self
@@ -41,7 +42,7 @@ final class Claims
             }
             $roles[] = $role;
         }
-        $groups = $labels = $classes = [];
+        $groups = $labels = $classes = $accounts = [];
         $groupMapping = $mapping['groups'];
         foreach (self::collection($c, $groupMapping, 128, 'groups') as $key => $value) {
             $id = self::identifier($value, $groupMapping);
@@ -54,6 +55,9 @@ final class Claims
             $fields = (array) $value;
             $labels[$id] = self::text($fields[$groupMapping['label'] ?? ''] ?? null);
             $account = self::text($fields[$groupMapping['account'] ?? ''] ?? null);
+            if ($account !== null && $account !== '') {
+                $accounts[$id] = $account;
+            }
             foreach ($profile->provider['classPrefixes'] as $prefix) {
                 if ($account !== null && str_starts_with($account, $prefix)) {
                     $class = trim(substr($account, strlen($prefix)));
@@ -65,7 +69,7 @@ final class Claims
         $classes = array_values(array_unique($classes));
         usort($classes, 'strnatcasecmp');
         return new self($identity->issuer, $externalId, array_values(array_unique($roles)), $groups, $labels,
-            self::text($c[$mapping['name']] ?? null), self::text($c[$mapping['username']] ?? null), $classes);
+            self::text($c[$mapping['name']] ?? null), self::text($c[$mapping['username']] ?? null), $classes, $accounts);
     }
 
     private static function collection(array $claims, array $mapping, int $limit, string $kind): array

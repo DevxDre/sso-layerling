@@ -16,7 +16,7 @@ Checkout bleibt dabei unverändert.
 - **Single Sign-on:** Anmeldung über OpenID Connect mit Authorization Code und PKCE; mit konfigurierbarem Anbieterprofil und IServ-Voreinstellung.
 - **Persönliche Projekte:** serverseitiger Speicher mit Dateiverwaltung und getrennten Benutzerbereichen.
 - **Betreuung:** berechtigte Gruppen können Schülerdateien lesen, herunterladen und bearbeiten.
-- **Administration:** eine gesonderte Gruppe kann zusätzlich Dateien aller registrierten Nutzer löschen.
+- **Rechteverwaltung:** eine in der privaten `.env` konfigurierte OIDC-Rolle kann Dateizugriff, Vorlagenverteilung und MCP-Freigaben für Gruppen und Rollen verwalten.
 - **Vorlagen:** CAD-Projekte und Arbeitsaufträge für Lernende bereitstellen.
 - **Kontrollierte Updates:** festgelegte Quellstände, geprüfte Adapter und Paketmanifeste mit Datei-Prüfsummen.
 

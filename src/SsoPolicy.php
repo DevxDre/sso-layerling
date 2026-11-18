@@ -7,10 +7,11 @@ final class SsoPolicy
 {
     private readonly array $principals;
     private $lock;
-    public function __construct(private readonly string $private, private readonly array $config)
+    private readonly PermissionRules $permissions;
+    public function __construct(private readonly string $private, private readonly array $config, private readonly bool $editPermissions = false)
     {
-        $this->lock=fopen($private.'/authorization.lock','rb');
-        if (!$this->lock || !flock($this->lock,LOCK_SH)) { Gateway::fail(503,'authorization_unavailable'); }
+        $this->lock=fopen($private.'/authorization.lock', $editPermissions ? 'r+b' : 'rb');
+        if (!$this->lock || !flock($this->lock, $editPermissions ? LOCK_EX : LOCK_SH)) { Gateway::fail(503,'authorization_unavailable'); }
         $path=$private.'/principals.json';
         if (is_link($path)||!is_file($path)||filesize($path)>2*1024*1024) { Gateway::fail(503,'authorization_unavailable'); }
         $raw=(string)file_get_contents($path);
@@ -18,6 +19,7 @@ final class SsoPolicy
         $records=json_decode($raw,true,32,JSON_THROW_ON_ERROR);
         if (!is_array($records)||($records!==[]&&array_is_list($records))) { Gateway::fail(503,'authorization_unavailable'); }
         $this->principals=$records;
+        $this->permissions = new PermissionRules($private . '/permissions.json');
         if (($config['authorizationModel']??null)!=='sso-last-login'||!is_array($config['groupIds']??null)) { Gateway::fail(503,'invalid_configuration'); }
         foreach(['makerspace','admins']as$key){
             $id=$config['groupIds'][$key]??null;
@@ -59,7 +61,7 @@ final class SsoPolicy
         }
         // Normalization changes require a new login before roles/groups can grant current privileges.
         if (($r['authorizationMapping'] ?? null) !== ($this->config['authorizationMapping'] ?? null)) {
-            $r['roles'] = $r['groups'] = [];
+            $r['roles'] = $r['groups'] = $r['groupAccounts'] = $r['groupLabels'] = [];
         }
         return $r;
     }
@@ -67,10 +69,35 @@ final class SsoPolicy
     {
         if(($this->record($actor)['enabled']??null)!==true){Gateway::fail(403,'access_denied');}
     }
-    public static function canPublishTemplates(array $roles, array $config): bool
+    public function isPermissionsAdmin(string $actor, ?string $role): bool
     {
-        $publishers = $config['templatePublisherRoleIds'] ?? [];
-        return array_intersect($roles, $publishers) !== [];
+        $record = $this->record($actor);
+        return $role !== null && ($record['enabled'] ?? null) === true && in_array($role, $record['roles'], true);
+    }
+
+    public function permissionSettings(): array
+    {
+        $selectors = [];
+        foreach (array_keys($this->principals) as $id) {
+            $record = $this->record((string) $id);
+            foreach ($record['roles'] ?? [] as $role) {
+                $selectors['role:' . $role] = '';
+            }
+            foreach ($record['groups'] ?? [] as $group) {
+                $label = $record['groupLabels'][$group] ?? '';
+                $selectors['group:' . $group] = is_string($label) ? $label : '';
+            }
+        }
+        ksort($selectors, SORT_NATURAL);
+        return [$this->permissions->rules(), $this->permissions->patterns(), $selectors];
+    }
+
+    public function changePermissions(array $form): bool
+    {
+        if (!$this->editPermissions) {
+            throw new \LogicException('Permission update requires exclusive lock');
+        }
+        return $this->permissions->change($form);
     }
 
     public function templateAccess(string $actor): array
@@ -78,7 +105,10 @@ final class SsoPolicy
         $this->requireActor($actor);
         $record = $this->record($actor);
         return [
-            'teacher' => self::canPublishTemplates($record['roles'], $this->config),
+            'teacher' => $this->permissions->decision('publish', $record)
+                ?? (array_intersect($record['roles'], $this->config['templatePublisherRoleIds'] ?? []) !== []),
+            'publishGroups' => $this->permissions->templateGroups($record),
+            'labels' => $record['groupLabels'] ?? [],
             'student' => $record['student'],
             'groups' => $record['groups'],
         ];
@@ -93,7 +123,8 @@ final class SsoPolicy
         $matches = static fn(array $rule): bool => in_array($actor, $rule['accounts'], true)
             || array_intersect($record['roles'], $rule['roles']) !== []
             || array_intersect($record['groups'], $rule['groups']) !== [];
-        return !$matches($rules['deny']) && $matches($rules['allow']);
+        return $this->permissions->decision('mcp', $record)
+            ?? (!$matches($rules['deny']) && $matches($rules['allow']));
     }
     private function group(array $record,string $kind): bool
     {
@@ -106,6 +137,8 @@ final class SsoPolicy
         $subject = $this->record($owner);
         $principal = $this->record($actor);
         if ($subject === null || $principal === null || in_array($operation, ['settings-read','settings-write'], true)) { return false; }
+        $decision = $this->permissions->decision($operation, $principal, $subject);
+        if ($decision !== null) { return $decision; }
         if ($this->group($principal, 'admins')) { return true; }
         return $this->group($principal, 'makerspace') && $subject['enabled'] && $subject['student'] && $operation !== 'delete';
     }
@@ -131,7 +164,7 @@ final class SsoPolicy
         $label = $name ?? 'Nutzer ' . substr($id, 0, 8);
         return ['userId' => $id, 'label' => $actor === $id ? 'Mein Speicher' : $label,
             'name' => $name, 'classes' => $classes,
-            'isSelf' => $actor === $id, 'canWrite' => true, 'canDelete' => $this->allowed($actor, $id, 'delete')];
+            'isSelf' => $actor === $id, 'canWrite' => $this->allowed($actor, $id, 'write'), 'canDelete' => $this->allowed($actor, $id, 'delete')];
     }
 
     public function owner(string $actor, mixed $selected): array

@@ -27,7 +27,8 @@ final class PrincipalWriter
                 throw new LoginFailed(LoginFailed::ACCOUNT, 'stale_or_disabled');
             }
             $records[$owner] = ['identityHash' => $binding, 'enabled' => true, 'groups' => $claims->groups,
-                'roles' => $claims->roles, 'student' => $claims->student($studentGroups, $studentRole),
+                'roles' => $claims->roles, 'groupAccounts' => $claims->groupAccounts,
+                'groupLabels' => $claims->groupLabels, 'student' => $claims->student($studentGroups, $studentRole),
                 'studentBasis' => ['role' => $studentRole, 'groups' => array_values(array_intersect($studentGroups, $claims->groups))],
                 'authorizationMapping' => $authorizationMapping,
                 'name' => $claims->name, 'classes' => $claims->classes, 'checkedAt' => $now, 'loginSequence' => $sequence];

@@ -208,7 +208,7 @@ def package(output: Path, installed_private: str = INSTALLED_PRIVATE, layerling:
         (app/'upstream/store.php').write_bytes(upstream)
         shutil.copyfile(ROOT/'upstream.lock.json',app/'upstream.lock.json')
         (app/'storage.json').write_text(storage_json, encoding='utf-8')
-        for name in ['files.php','files.js','files.css','vorlagen.js']:
+        for name in ['files.php','files.js','files.css','vorlagen.js','rechte.php']:
             shutil.copyfile(ROOT/'public'/name,public/name)
         for name,method in [('store.php','store'),('session.php','session'),('owners.php','owners'),('vorlagen.php','templates')]:
             (public/name).write_text("<?php\ndeclare(strict_types=1);\nini_set('display_errors','0');\n(require '"+installed_private+"/app/src/storage-bootstrap.php')->"+method+"();\n")

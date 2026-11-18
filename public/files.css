@@ -6,3 +6,7 @@ button, select, input[type=file] { padding: .4rem .65rem; } button { cursor: poi
 table { border-collapse: collapse; width: 100%; } th, td { padding: .7rem; border-bottom: 1px solid #dde2e7; text-align: left; overflow-wrap: anywhere; }
 td button, td a { margin-right: .6rem; } #status { min-height: 1.5rem; padding: .7rem; background: #edf3f9; }
 @media (max-width: 650px) { main { margin: 0; padding: 1rem; border-radius: 0; } td button, td a { display: block; margin: .3rem 0; } }
+.permissions-table { overflow-x: auto; }
+.permissions-table form, .permission-patterns form { margin: 0; }
+.permission-patterns li { margin: .5rem 0; }
+.permission-patterns button { margin-left: .6rem; }

@@ -135,7 +135,7 @@ final class Gateway
         $owner = $policy->owner($actor, $_GET['owner'] ?? $actor);
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode(['userId'=>$actor, 'csrfToken'=>$_SESSION['csrf'],
-            'ownerId'=>$owner['userId'], 'canDelete'=>$owner['canDelete'],
+            'ownerId'=>$owner['userId'], 'canWrite'=>$owner['canWrite'], 'canDelete'=>$owner['canDelete'],
             'expiresAt'=>min($_SESSION['issuedAt']+$this->config['absoluteSeconds'],
                 $_SESSION['lastSeen']+$this->config['idleSeconds'])], JSON_THROW_ON_ERROR), "\n";
         exit;
@@ -160,7 +160,7 @@ final class Gateway
             }
             $catalog = new TemplateCatalog($this->private, true);
             if ($_GET === ['action' => 'publish']) {
-                $catalog->publish($actor, $access['groups'], $_POST, $_FILES['project'] ?? []);
+                $catalog->publish($actor, $access['publishGroups'], $_POST, $_FILES['project'] ?? []);
                 http_response_code(201);
             } elseif ($_GET === ['action' => 'withdraw']) {
                 $entry = $catalog->get($_POST['id'] ?? null);
@@ -194,7 +194,7 @@ final class Gateway
         $entries = array_filter($catalog->entries(), static fn(array $entry): bool =>
             $canCopy($entry) || ($access['teacher'] && $entry['publisher'] === $actor));
         $csrf = $_SESSION['csrf'];
-        $labels = $_SESSION['diagnostic']['templateGroupLabels'] ?? [];
+        $labels = $access['labels'] ?: ($_SESSION['diagnostic']['templateGroupLabels'] ?? []);
         $hasCad = is_file($this->sources . '/cad/index.html');
         header("Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'");
         // Same-origin JS POSTs need the configured Origin, not Origin:null.

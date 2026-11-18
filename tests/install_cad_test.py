@@ -56,6 +56,7 @@ class CadInstallerTest(unittest.TestCase):
             self.private / 'projects' / 'fixture.lyl': b'synthetic project',
             self.private / 'sessions' / ('sess_' + 'a'*64): b'synthetic session',
             self.private / 'principals.json': b'{}',
+            self.private / 'permissions.json': b'{"version":1,"rules":[],"patterns":["makerspace^"]}',
             self.private / 'audit.jsonl': b'{"fixture":true}\n',
             self.public / '.well-known/acme-challenge/proof': b'acme proof',
             secret: secret.read_bytes(),
@@ -133,7 +134,8 @@ class CadInstallerTest(unittest.TestCase):
         shutil.copytree(self.cad, previous)
         manifest = self.metadata(previous / 'manifest.json')
         for path in ['public/vorlagen.php', 'public/vorlagen.js', 'private/app/src/TemplateCatalog.php',
-                     'public/konto/index.php', 'public/files/index.php']:
+                     'public/konto/index.php', 'public/files/index.php', 'public/rechte.php',
+                     'private/app/src/PermissionRules.php', 'private/app/src/Oidc/permissions-page.php']:
             (previous / path).unlink()
             del manifest['files'][path]
         bundle_path = 'private/app/cad/manifest.json'
@@ -146,12 +148,14 @@ class CadInstallerTest(unittest.TestCase):
         self.install_ok(previous, '--cad-test')
         self.install_ok(self.cad, '--cad-test')
         self.assertEqual(self.request('/vorlagen.php').stderr, '401')
+        self.assertEqual(self.request('/rechte.php').stderr, '401')
         self.assertTrue((self.public / 'konto/index.php').is_file())
         self.assertTrue((self.public / 'files/index.php').is_file())
         snapshot = self.private / 'templates' / 'fixture'
         snapshot.write_bytes(b'private template data')
         self.install_ok(previous, '--cad-test')
         self.assertFalse((self.public / 'vorlagen.php').exists())
+        self.assertFalse((self.public / 'rechte.php').exists())
         self.assertFalse((self.public / 'vorlagen.js').exists())
         self.assertFalse((self.public / 'konto/index.php').exists())
         self.assertFalse((self.public / 'files/index.php').exists())

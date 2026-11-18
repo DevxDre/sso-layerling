@@ -37,6 +37,8 @@ class IntegratedStorageTest(unittest.TestCase):
     alternate_roles = {'ROLE_STUDENT': 'learner', 'ROLE_TEACHER': 'instructor',
                        'ROLE_ADMIN': 'operator', 'ROLE_TEACH_AKTIV': 'active-instructor'}
     class_prefix = 'cohort-' if alternate else 'klasse.'
+    router = ROOT/'scripts/mcp-test-router.php'
+    rights_admin_role = 'permissions-operator'
 
     def provider_role(self, role):
         return self.alternate_roles.get(role, role) if self.alternate else role
@@ -62,10 +64,20 @@ class IntegratedStorageTest(unittest.TestCase):
         config=cls.private/'app/storage.json';values=json.loads(config.read_text());values['origin']=cls.origin;config.write_text(json.dumps(values))
         bootstrap=cls.runtime/'public/_sso.php';text=bootstrap.read_text()
         text=text.replace(",'"+cls.origin+"');", ",'"+cls.origin+"',\\Sso\\Layerling\\StorageConfig::load('"+str(config)+"'));")
+        cls.dotenv = cls.root/'.env'
+        cls.dotenv.touch(mode=0o600)
+        cls.dotenv_defaults = ('SSO_LAYERLING_OIDC_CLIENT_ID=test-client\n'
+                               'SSO_LAYERLING_OIDC_CLIENT_SECRET=synthetic-secret-not-real\n')
+        text = text.replace(
+            r"new \Sso\Layerling\Oidc\Config('test-client',str_repeat('s',32),$profile)",
+            rf"\Sso\Layerling\Oidc\Config::fromFile('{cls.dotenv}',$profile)",
+        )
         bootstrap.write_text(text)
     def setUp(self):
         sso.SsoHTTPTest.setUp(self)
         (self.private/'principals.json').write_text('{}')
+        (self.private/'permissions.json').unlink(missing_ok=True)
+        self.dotenv.write_text(self.dotenv_defaults + 'SSO_LAYERLING_ADMIN_ROLE=' + self.rights_admin_role + '\n')
         (self.private/'audit.jsonl').write_text('')
         for directory in ['projects', 'templates']:
             for p in (self.private/directory).iterdir():shutil.rmtree(p) if p.is_dir()and not p.is_symlink()else p.unlink()
@@ -122,6 +134,105 @@ class IntegratedStorageTest(unittest.TestCase):
         body.extend([project('template') if content is None else content, f'\r\n--{boundary}--\r\n'.encode()])
         return self.raw(client, 'POST', '/vorlagen.php?action=publish', b''.join(body),
                         {'Content-Type': f'multipart/form-data; boundary={boundary}'}, **options)
+
+    def change_rule(self, admin, operation, actor, *, owner='', effect='allow'):
+        form = {'csrf': admin.csrf, 'action': 'save-rule', 'operation': operation,
+                'actor': actor, 'owner': owner, 'effect': effect}
+        response = admin.request('/rechte.php', 'POST', form)
+        self.assertEqual((response[0], response[1].get('location')), (303, '/rechte.php?saved=1'), response[2][:300])
+
+    def test_permissions_page_access_and_file_rules(self):
+        path = '/rechte.php'
+        learner = self.login(groups=['lab'])
+        legacy_admin = self.login(U2, ['ROLE_ADMIN'], [ADMIN])
+        operator = self.login(UA, [self.rights_admin_role])
+        tutor = self.login(UM, ['ROLE_TEACHER'], ['tutoring'])
+        self.assertEqual(self.raw(sso.Client(self), path=path)[0], 401)
+        self.assertEqual(legacy_admin.request(path)[0], 403)
+        self.assertEqual(self.raw(operator, path=path)[0], 200)
+        options = self.raw(operator, path=path)[2]
+        self.assertIn(b'value="group:lab"', options)
+        self.assertIn(b'value="role:' + self.provider_role('ROLE_TEACHER').encode() + b'"', options)
+        form = {'csrf': operator.csrf, 'action': 'add-pattern', 'pattern': 'makerspace^'}
+        self.assertEqual(tutor.request(path, 'POST', form | {'csrf': tutor.csrf})[0], 403)
+        self.assertEqual(operator.request(path, 'POST', form | {'csrf': 'invalid'})[0], 403)
+        self.assertEqual(operator.request(path, 'POST', form, {'Origin': 'https://foreign.invalid'})[0], 403)
+        self.assertEqual(operator.request(path, 'POST', form | {'pattern': '.*'})[0], 400)
+        self.assertFalse((self.private/'permissions.json').exists())
+
+        original = self.json(self.upload(learner, 'original'), 201)['project']
+        delete_headers = {'If-Match': '"' + original['revision'] + '"'}
+        filename = '/store.php?' + urlencode({'_sso_owner': learner.owner, 'fileName': 'same.lyl'})
+        teacher_role = 'role:' + self.provider_role('ROLE_TEACHER')
+        subject_role = 'role:' + self.provider_role('ROLE_STUDENT')
+        self.json(self.raw(operator, path=filename), 403)
+        self.change_rule(operator, 'read', teacher_role, owner='group:lab')
+        visible = self.json(self.raw(tutor, path='/owners.php'))['owners']
+        other = next(record for record in visible if record['userId'] == learner.owner)
+        self.assertFalse(other['canWrite'])
+        self.assertFalse(other['canDelete'])
+        self.assertEqual(self.raw(tutor, path=filename)[2], project('original'))
+        self.json(self.upload(tutor, 'changed', learner.owner, name='new.lyl'), 403)
+        self.change_rule(operator, 'write', 'group:tutoring', owner=subject_role)
+        self.assertEqual(self.upload(tutor, 'changed', learner.owner, name='new.lyl')[0], 201)
+        self.assertEqual(self.raw(learner, path='/store.php?fileName=new.lyl')[2], project('changed'))
+        self.json(self.raw(tutor, 'DELETE', filename), 403)
+        self.change_rule(operator, 'delete', teacher_role, owner=subject_role)
+        self.assertEqual(self.raw(tutor, 'DELETE', filename, headers=delete_headers)[0], 200)
+        new_file = filename.replace('same.lyl', 'new.lyl')
+        self.change_rule(operator, 'read', 'group:tutoring', owner=subject_role, effect='deny')
+        self.json(self.raw(tutor, path=new_file), 403)
+        self.assertNotIn(learner.owner, [entry['userId'] for entry in self.json(self.raw(tutor, path='/owners.php'))['owners']])
+        self.change_rule(operator, 'write', teacher_role, owner='group:lab', effect='deny')
+        self.json(self.upload(tutor, 'denied', learner.owner, name='denied.lyl'), 403)
+
+        keys = re.findall(rb'name="key" value="([a-f0-9]{64})"', operator.request(path)[2])
+        self.assertEqual(len(keys), 5)
+        self.assertEqual(operator.request(path, 'POST', {
+            'csrf': operator.csrf, 'action': 'remove-rule', 'key': keys[3].decode(), 'effect': 'deny',
+        })[0], 303)
+        self.assertEqual(self.raw(tutor, path=new_file)[2], project('changed'))
+        self.dotenv.write_text(self.dotenv_defaults)
+        self.assertEqual(operator.request(path)[0], 403)
+        self.dotenv.write_text(self.dotenv_defaults + 'SSO_LAYERLING_ADMIN_ROLE=' + self.rights_admin_role + '\n')
+        self.login(UA, ['ROLE_TEACHER'])
+        self.assertEqual(operator.request(path)[0], 403)
+
+    def test_permission_rules_for_templates_and_mcp(self):
+        operator = self.login(UA, [self.rights_admin_role])
+        instructor = self.login(UM, ['ROLE_ADMIN'], ['target', 'other'],
+                                group_acts={'target': 'makerspace-demo', 'other': 'archive-makerspace'})
+        learner = self.login(groups=['target'])
+        actor = 'role:' + self.provider_role('ROLE_ADMIN')
+        self.json(self.raw(instructor, path='/vorlagen.php'), 403)
+        self.change_rule(operator, 'publish', actor)
+        form = {'csrf': operator.csrf, 'action': 'add-pattern', 'pattern': 'makerspace^'}
+        self.assertEqual(operator.request('/rechte.php', 'POST', form)[0], 303)
+        result = self.raw(instructor, path='/vorlagen.php')
+        self.assertEqual(result[0], 200)
+        self.assertIn(b'name="groups[]" value="target"', result[2])
+        self.assertNotIn(b'name="groups[]" value="other"', result[2])
+        self.json(self.publish_template(instructor, ['other']), 403)
+        self.assertEqual(self.publish_template(instructor, ['target'])[0], 201)
+        self.assertIn(b'data-copy-template', self.raw(learner, path='/vorlagen.php')[2])
+        self.change_rule(operator, 'publish', actor, effect='deny')
+        self.json(self.publish_template(instructor, ['target']), 403)
+        self.assertIn(b'data-copy-template', self.raw(learner, path='/vorlagen.php')[2])
+
+        config_path = self.private/'app/mcp-test.json'
+        config_path.write_text(json.dumps({effect: {'accounts': [], 'roles': [], 'groups': []} for effect in ['allow', 'deny']}))
+        self.addCleanup(config_path.unlink, missing_ok=True)
+        mcp = '/api/layerling-mcp'
+        def pair():
+            return self.raw(instructor, 'POST', mcp, '{"type":"pair"}', {'Content-Type': 'application/json'})
+        self.json(pair(), 403)
+        self.change_rule(operator, 'mcp', 'group:target')
+        token = self.json(pair())['token']
+        bearer = {'Authorization': 'Bearer ' + token}
+        self.assertEqual(self.raw(sso.Client(self), path=mcp, headers=bearer)[0], 200)
+        self.change_rule(operator, 'mcp', actor, effect='deny')
+        self.json(pair(), 403)
+        self.json(self.raw(sso.Client(self), path=mcp, headers=bearer), 403)
 
     def test_template_permissions_follow_latest_iserv_login(self):
         path = '/vorlagen.php'

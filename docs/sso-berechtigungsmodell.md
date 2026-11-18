@@ -90,3 +90,35 @@ Sitzungslaufzeiten sind separate Sicherheitsgrenzen und werden dadurch nicht auf
 
 Der IDM-Metadatenprüfer und die vorangegangene Recherche gehören nicht mehr zum aktuellen
 Arbeitsauftrag. Ihre Ausführung auf dem IServ ist nicht erforderlich.
+
+
+## Rechte über die Oberfläche verwalten
+
+Setze in der privaten `.env` beispielsweise `SSO_LAYERLING_ADMIN_ROLE=ROLE_ADMIN`.
+Der Wert muss mit der Rollen-ID aus dem normalisierten OIDC-Rollenclaim
+übereinstimmen. Mit leerem Wert ist der Zugriff auf die Rechteseite gesperrt.
+Administratoren erreichen die Seite über das SSO-Menü, die Kontoseite oder
+direkt unter `/rechte.php`.
+
+- Wähle als Akteur eine Gruppe (`group:<ID>`) oder Rolle (`role:<ID>`).
+  Wähle für fremde Dateizugriffe zusätzlich die Gruppe oder Rolle der Zielkonten.
+  Auflisten und Lesen, Bearbeiten und Löschen lassen sich einzeln freigeben oder sperren.
+- Bei mehreren passenden Regeln hat „Verbieten“ Vorrang. Ohne Treffer greift für
+  die jeweilige Aktion die bisherige Konfiguration. Eigene Dateien und persönliche
+  Einstellungen behalten ihre bisherige Behandlung.
+- Die Rechte für Vorlagen und MCP können nach Gruppe oder Rolle gesetzt werden.
+  MCP setzt weiterhin eine für die Installation aktivierte Brücke mit gültiger
+  privater MCP-Konfiguration voraus. Wenn eine passende Regel vorhanden ist,
+  entscheidet sie anstelle der bisherigen MCP-Freigabeliste.
+- Gruppenmuster filtern die beim Verteilen auswählbaren eigenen Gruppen.
+  `makerspace^` sucht nach Gruppenaccounts mit dem Präfix `makerspace`.
+  Ohne abschließendes `^` gilt exakte Übereinstimmung. Liefert der Anmeldeserver
+  keinen Gruppenaccount, wird die Gruppen-ID verwendet. Ohne Muster stehen alle
+  eigenen Gruppen zur Auswahl. Gleiche Prüfung beim Speichern der Verteilung.
+- Der Server prüft Regeln bei jeder geschützten Anfrage. Geänderte OIDC-Rollen
+  und Gruppenmitgliedschaften werden bei der nächsten erfolgreichen Anmeldung
+  des jeweiligen Kontos übernommen. Bei Bestandskonten stehen die Gruppenaccounts
+  nach dem ersten Login mit dem aktualisierten Wrapper zur Verfügung.
+
+Die Änderungen werden in `private/permissions.json` außerhalb des Webroots
+gespeichert. Die Datei gehört zu den privaten Laufzeitdaten der Installation.
