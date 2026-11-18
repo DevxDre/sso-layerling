@@ -227,12 +227,13 @@ final class Web
         if (!$policy->isPermissionsAdmin($session['userId'], $this->config->adminRole)) {
             $this->denyPermissions(403);
         }
-        if ($changing && $policy->changePermissions($_POST)) {
+        [$rules, $patterns, $selectors, $groupNames] = $policy->permissionSettings();
+        if ($changing && $policy->changePermissions($_POST, $groupNames)) {
             $this->redirect('/rechte.php?saved=1');
         }
         $invalid = $changing;
         if ($invalid) { http_response_code(400); }
-        [$rules, $patterns, $selectors] = $policy->permissionSettings();
+        $groupNamesVersion = SsoPolicy::groupNamesVersion($groupNames);
         unset($policy);
         session_write_close();
         header('Referrer-Policy: same-origin');

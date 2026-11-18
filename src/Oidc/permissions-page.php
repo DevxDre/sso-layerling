@@ -27,8 +27,9 @@ $back = $this->hasCad() ? '/konto/' : '/';
 <form method="post" action="/rechte.php">
   <input type="hidden" name="csrf" value="<?= $escape($csrf) ?>">
   <input type="hidden" name="action" value="save-rule">
-  <p><label>Gruppe oder Rolle mit Zugriff <input name="actor" list="selectors" maxlength="134" required></label></p>
-  <p><label>Gruppe oder Rolle der Zielkonten <input name="owner" list="selectors" maxlength="134" required></label></p>
+  <input type="hidden" name="groupNamesVersion" value="<?= $escape($groupNamesVersion) ?>">
+  <p><label>Gruppe oder Rolle mit Zugriff <input name="actor" list="selectors" maxlength="207" required></label></p>
+  <p><label>Gruppe oder Rolle der Zielkonten <input name="owner" list="selectors" maxlength="207" required></label></p>
   <p><label>Recht
     <select name="operation">
       <?php foreach (['read', 'write', 'delete'] as $operation): ?>
@@ -46,7 +47,8 @@ $back = $this->hasCad() ? '/konto/' : '/';
 <form method="post" action="/rechte.php">
   <input type="hidden" name="csrf" value="<?= $escape($csrf) ?>">
   <input type="hidden" name="action" value="save-rule">
-  <p><label>Gruppe oder Rolle <input name="actor" list="selectors" maxlength="134" required></label></p>
+  <input type="hidden" name="groupNamesVersion" value="<?= $escape($groupNamesVersion) ?>">
+  <p><label>Gruppe oder Rolle <input name="actor" list="selectors" maxlength="207" required></label></p>
   <p><label>Recht
     <select name="operation">
       <?php foreach (['publish', 'mcp'] as $operation): ?>
@@ -58,7 +60,7 @@ $back = $this->hasCad() ? '/konto/' : '/';
   <button>Regel speichern</button>
 </form>
 </section>
-<p>Wähle eine bekannte Kennung oder gib sie mit <code>group:</code> für Gruppen oder <code>role:</code> für Rollen ein.</p>
+<p>Wähle einen Gruppenaccount (<code>groups:</code>) oder eine Rolle (<code>role:</code>). Für Gruppen ohne eindeutigen Account kannst du die Gruppen-ID mit <code>group:</code> eingeben.</p>
 <datalist id="selectors">
   <?php foreach ($selectors as $selector => $label): ?>
     <option value="<?= $escape($selector) ?>"><?= $escape($label) ?></option>
@@ -76,8 +78,8 @@ $back = $this->hasCad() ? '/konto/' : '/';
 <tbody>
 <?php foreach ($rules as $key => $rule): ?>
 <tr>
-  <td><?= $escape($rule['actor']) ?></td>
-  <td><?= $escape($rule['owner'] ?: '–') ?></td>
+  <td><?= $escape($groupNames[$rule['actor']] ?? $rule['actor']) ?></td>
+  <td><?= $escape($groupNames[$rule['owner']] ?? ($rule['owner'] ?: '–')) ?></td>
   <td><?= $escape(PermissionRules::OPERATIONS[$rule['operation']]) ?></td>
   <td><?= $escape($effects[$rule['effect']]) ?></td>
   <td><form method="post" action="/rechte.php">

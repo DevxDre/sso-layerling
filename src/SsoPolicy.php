@@ -78,26 +78,64 @@ final class SsoPolicy
     public function permissionSettings(): array
     {
         $selectors = [];
+        $groups = [];
         foreach (array_keys($this->principals) as $id) {
             $record = $this->record((string) $id);
             foreach ($record['roles'] ?? [] as $role) {
                 $selectors['role:' . $role] = '';
             }
             foreach ($record['groups'] ?? [] as $group) {
-                $label = $record['groupLabels'][$group] ?? '';
-                $selectors['group:' . $group] = is_string($label) ? $label : '';
+                if ($record['loginSequence'] > ($groups[$group]['sequence'] ?? 0)) {
+                    $account = $record['groupAccounts'][$group] ?? null;
+                    $label = $record['groupLabels'][$group] ?? null;
+                    $groups[$group] = [
+                        'sequence' => $record['loginSequence'],
+                        'account' => is_string($account) ? $account : '',
+                        'label' => is_string($label) ? $label : '',
+                    ];
+                }
             }
         }
+
+        $accountCounts = array_count_values(array_column($groups, 'account'));
+        $groupNames = [];
+        foreach ($groups as $id => $group) {
+            $selector = 'group:' . $id;
+            $account = $group['account'];
+            if ($account !== '' && $accountCounts[$account] === 1) {
+                $groupNames[$selector] = 'groups:' . $account;
+            }
+            $selectors[$groupNames[$selector] ?? $selector] = $group['label'];
+        }
         ksort($selectors, SORT_NATURAL);
-        return [$this->permissions->rules(), $this->permissions->patterns(), $selectors];
+        ksort($groupNames, SORT_STRING);
+        return [$this->permissions->rules(), $this->permissions->patterns(), $selectors, $groupNames];
     }
 
-    public function changePermissions(array $form): bool
+    public function changePermissions(array $form, array $groupNames): bool
     {
         if (!$this->editPermissions) {
             throw new \LogicException('Permission update requires exclusive lock');
         }
+        if (($form['action'] ?? null) === 'save-rule') {
+            $submittedVersion = $form['groupNamesVersion'] ?? null;
+            foreach (['actor', 'owner'] as $field) {
+                $value = $form[$field] ?? null;
+                if (is_string($value) && str_starts_with($value, 'groups:')) {
+                    $selector = array_search($value, $groupNames, true);
+                    if ($selector === false || $submittedVersion !== self::groupNamesVersion($groupNames)) {
+                        return false;
+                    }
+                    $form[$field] = $selector;
+                }
+            }
+        }
         return $this->permissions->change($form);
+    }
+
+    public static function groupNamesVersion(array $groupNames): string
+    {
+        return hash('sha256', json_encode($groupNames, JSON_THROW_ON_ERROR));
     }
 
     public function templateAccess(string $actor): array

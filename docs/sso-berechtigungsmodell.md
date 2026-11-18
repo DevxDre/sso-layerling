@@ -100,7 +100,9 @@ Der Wert muss mit der Rollen-ID aus dem normalisierten OIDC-Rollenclaim
 Administratoren erreichen die Seite über das SSO-Menü, die Kontoseite oder
 direkt unter `/rechte.php`.
 
-- Wähle als Akteur eine Gruppe (`group:<ID>`) oder Rolle (`role:<ID>`).
+- Wähle als Akteur einen Gruppenaccount (`groups:<Accountname>`) oder eine Rolle
+  (`role:<ID>`). Bei fehlenden oder mehrdeutigen Gruppenaccounts kannst du die
+  Gruppen-ID (`group:<ID>`) verwenden. Die Regeln bleiben an die Gruppen-ID gebunden.
   Wähle für fremde Dateizugriffe zusätzlich die Gruppe oder Rolle der Zielkonten.
   Auflisten und Lesen, Bearbeiten und Löschen lassen sich einzeln freigeben oder sperren.
 - Bei mehreren passenden Regeln hat „Verbieten“ Vorrang. Ohne Treffer greift für

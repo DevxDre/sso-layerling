@@ -135,23 +135,26 @@ class IntegratedStorageTest(unittest.TestCase):
         return self.raw(client, 'POST', '/vorlagen.php?action=publish', b''.join(body),
                         {'Content-Type': f'multipart/form-data; boundary={boundary}'}, **options)
 
-    def change_rule(self, admin, operation, actor, *, owner='', effect='allow'):
+    def change_rule(self, admin, operation, actor, *, owner='', effect='allow', group_names_version=''):
         form = {'csrf': admin.csrf, 'action': 'save-rule', 'operation': operation,
-                'actor': actor, 'owner': owner, 'effect': effect}
+                'actor': actor, 'owner': owner, 'effect': effect, 'groupNamesVersion': group_names_version}
         response = admin.request('/rechte.php', 'POST', form)
         self.assertEqual((response[0], response[1].get('location')), (303, '/rechte.php?saved=1'), response[2][:300])
 
     def test_permissions_page_access_and_file_rules(self):
         path = '/rechte.php'
-        learner = self.login(groups=['lab'])
+        learner = self.login(groups=['lab'], group_acts={'lab': 'makerspace-lab'})
         legacy_admin = self.login(U2, ['ROLE_ADMIN'], [ADMIN])
         operator = self.login(UA, [self.rights_admin_role])
-        tutor = self.login(UM, ['ROLE_TEACHER'], ['tutoring'])
+        tutor = self.login(UM, ['ROLE_TEACHER'], ['tutoring'], group_acts={'tutoring': 'mentors'})
         self.assertEqual(self.raw(sso.Client(self), path=path)[0], 401)
         self.assertEqual(legacy_admin.request(path)[0], 403)
         self.assertEqual(self.raw(operator, path=path)[0], 200)
         options = self.raw(operator, path=path)[2]
-        self.assertIn(b'value="group:lab"', options)
+        self.assertIn(b'value="groups:makerspace-lab"', options)
+        self.assertNotIn(b'value="group:lab"', options)
+        self.assertIn(b'value="groups:mentors"', options)
+        group_names_version = re.search(rb'name="groupNamesVersion" value="([a-f0-9]{64})"', options)[1].decode()
         self.assertIn(b'value="role:' + self.provider_role('ROLE_TEACHER').encode() + b'"', options)
         form = {'csrf': operator.csrf, 'action': 'add-pattern', 'pattern': 'makerspace^'}
         self.assertEqual(tutor.request(path, 'POST', form | {'csrf': tutor.csrf})[0], 403)
@@ -166,7 +169,10 @@ class IntegratedStorageTest(unittest.TestCase):
         teacher_role = 'role:' + self.provider_role('ROLE_TEACHER')
         subject_role = 'role:' + self.provider_role('ROLE_STUDENT')
         self.json(self.raw(operator, path=filename), 403)
-        self.change_rule(operator, 'read', teacher_role, owner='group:lab')
+        self.change_rule(operator, 'read', teacher_role, owner='groups:makerspace-lab',
+                         group_names_version=group_names_version)
+        saved = json.loads((self.private/'permissions.json').read_text())['rules']
+        self.assertEqual(saved[0]['owner'], 'group:lab')
         visible = self.json(self.raw(tutor, path='/owners.php'))['owners']
         other = next(record for record in visible if record['userId'] == learner.owner)
         self.assertFalse(other['canWrite'])
@@ -186,11 +192,24 @@ class IntegratedStorageTest(unittest.TestCase):
         self.change_rule(operator, 'write', teacher_role, owner='group:lab', effect='deny')
         self.json(self.upload(tutor, 'denied', learner.owner, name='denied.lyl'), 403)
 
-        keys = re.findall(rb'name="key" value="([a-f0-9]{64})"', operator.request(path)[2])
+        saved_page = operator.request(path)[2]
+        self.assertIn(b'<td>groups:makerspace-lab</td>', saved_page)
+        self.assertIn(b'<td>groups:mentors</td>', saved_page)
+        keys = re.findall(rb'name="key" value="([a-f0-9]{64})"', saved_page)
         self.assertEqual(len(keys), 5)
         self.assertEqual(operator.request(path, 'POST', {
             'csrf': operator.csrf, 'action': 'remove-rule', 'key': keys[3].decode(), 'effect': 'deny',
         })[0], 303)
+        self.assertEqual(self.raw(tutor, path=new_file)[2], project('changed'))
+
+        self.login(groups=['lab'], group_acts={'lab': 'renamed-lab'})
+        self.login(U2, ['ROLE_ADMIN'], [ADMIN, 'other-lab'], group_acts={'other-lab': 'makerspace-lab'})
+        self.assertEqual(operator.request(path, 'POST', {
+            'csrf': operator.csrf, 'action': 'save-rule', 'operation': 'read',
+            'actor': teacher_role, 'owner': 'groups:makerspace-lab', 'effect': 'allow',
+            'groupNamesVersion': group_names_version,
+        })[0], 400)
+        self.assertIn(b'<td>groups:renamed-lab</td>', operator.request(path)[2])
         self.assertEqual(self.raw(tutor, path=new_file)[2], project('changed'))
         self.dotenv.write_text(self.dotenv_defaults)
         self.assertEqual(operator.request(path)[0], 403)
