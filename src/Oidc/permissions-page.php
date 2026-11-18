@@ -20,7 +20,7 @@ $back = $this->hasCad() ? '/konto/' : '/';
 <header><h1>Rechte verwalten</h1><a href="<?= $back ?>">Zurück zum Konto</a></header>
 <?php if (isset($_GET['saved'])): ?><p role="status">Änderung gespeichert.</p><?php endif; ?>
 <?php if ($invalid): ?><p role="alert">Die Änderung konnte nicht gespeichert werden. Prüfe die Eingaben und die angezeigten Regeln.</p><?php endif; ?>
-<p>Bei mehreren passenden Regeln hat „Verbieten“ Vorrang. Ohne passende Regel gilt die bisherige Konfiguration.</p>
+<p>Bei mehreren passenden Regeln hat „Verbieten“ Vorrang. Für fremde Konten, Vorlagenverteilung und MCP-Token ist eine passende Freigabe erforderlich.</p>
 
 <section aria-labelledby="accounts-heading">
 <h2 id="accounts-heading">Zugriff auf fremde Konten</h2>

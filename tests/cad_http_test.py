@@ -49,14 +49,9 @@ class CadHTTPTest(base.IntegratedStorageTest):
         code="session_name('SSO_LAYERLING_SESSION');session_save_path($argv[1]);session_id($argv[2]);session_start();$_SESSION['lastSeen']=(int)$argv[3];session_write_close();"
         subprocess.run([OPTIONS.php,'-r',code,str(self.private/'sessions'),client.cookies['SSO_LAYERLING_SESSION'],str(value)],check=True,capture_output=True)
 
-    def mcp_rules(self, *, accounts=(), roles=(), groups=(), deny_accounts=(), deny_roles=(), deny_groups=()):
-        roles = [self.provider_role(role) for role in roles]
-        deny_roles = [self.provider_role(role) for role in deny_roles]
-        groups = [self.provider_group(group) for group in groups]
-        deny_groups = [self.provider_group(group) for group in deny_groups]
+    def enable_mcp(self):
         path = self.private/'app/mcp-test.json'
-        path.write_text(json.dumps({'allow': {'accounts': accounts, 'roles': roles, 'groups': groups},
-                                    'deny': {'accounts': deny_accounts, 'roles': deny_roles, 'groups': deny_groups}}))
+        path.write_text(json.dumps({'enabled': True}))
         self.addCleanup(path.unlink, missing_ok=True)
 
     def mcp_post(self, client, payload, **options):
@@ -67,30 +62,38 @@ class CadHTTPTest(base.IntegratedStorageTest):
         anonymous = base.sso.Client(self)
         status_path = self.mcp_path + '?status=1'
         self.json(self.raw(anonymous, path=status_path), 404)
-        by_account = self.login()
+        by_personal_group = self.login(groups=['mcp-personal'])
         by_role = self.login(base.U2, ['ROLE_TEACHER'], [base.MAKER])
         by_group = self.login(base.UM, groups=['mcp-pilot'])
-        denied = self.login(base.UA, ['ROLE_TEACHER'], ['mcp-pilot'])
+        denied = self.login(base.UA, ['ROLE_TEACHER'], ['mcp-pilot', 'mcp-blocked'])
         outsider = self.login('55555555-5555-5555-5555-555555555555')
-        self.mcp_rules(accounts=[by_account.owner], roles=['ROLE_TEACHER'], groups=['mcp-pilot'], deny_accounts=[denied.owner])
-        for client in [by_account, by_role, by_group]:
+        self.enable_mcp()
+        self.assertEqual(self.json(self.raw(by_role, path=status_path)), {'remote': False})
+        personal_grant = ('group:mcp-personal', '', 'mcp', 'allow')
+        role_grant = ('role:' + self.provider_role('ROLE_TEACHER'), '', 'mcp', 'allow')
+        group_grant = ('group:mcp-pilot', '', 'mcp', 'allow')
+        blocked = ('group:mcp-blocked', '', 'mcp', 'deny')
+        grants = (personal_grant, role_grant, group_grant, blocked)
+        self.seed_permissions(*self.ownership_rules(base.MAKER), *grants)
+        for client in [by_personal_group, by_role, by_group]:
             self.assertEqual(self.json(self.raw(client, path=status_path)), {'remote': True})
-        self.assertIn(b'"mcpTest":false', self.raw(by_role, path='/cad.php?owner=' + by_account.owner)[2])
+        self.assertIn(b'"mcpTest":false', self.raw(by_role, path='/cad.php?owner=' + by_personal_group.owner)[2])
         for client in [anonymous, denied, outsider]:
             self.assertEqual(self.json(self.raw(client, path=status_path)), {'remote': False})
             self.json(self.mcp_post(client, {'type': 'pair'}), 403)
-        self.mcp_rules(accounts=[by_account.owner], roles=['ROLE_TEACHER'], groups=['mcp-pilot'], deny_roles=['ROLE_TEACHER'])
+        self.seed_permissions(*grants, ('group:' + self.provider_group(base.MAKER), '', 'mcp', 'deny'))
         self.assertEqual(self.json(self.raw(by_role, path=status_path)), {'remote': False})
-        self.mcp_rules(accounts=[by_account.owner], roles=['ROLE_TEACHER'], groups=['mcp-pilot'], deny_groups=['mcp-pilot'])
+        self.seed_permissions(personal_grant, role_grant, ('group:mcp-pilot', '', 'mcp', 'deny'))
         self.assertEqual(self.json(self.raw(by_group, path=status_path)), {'remote': False})
-        self.json(self.mcp_post(by_account, {'type': 'pair'}, protect=False), 403)
-        self.json(self.mcp_post(by_account, {'type': 'pair'}, headers={'Origin': 'https://foreign.invalid'}), 403)
+        self.seed_permissions(*grants)
+        self.json(self.mcp_post(by_personal_group, {'type': 'pair'}, protect=False), 403)
+        self.json(self.mcp_post(by_personal_group, {'type': 'pair'}, headers={'Origin': 'https://foreign.invalid'}), 403)
         self.json(self.raw(anonymous, path=self.mcp_path), 401)
 
-        second_session = self.login()
-        for client, editor_id in [(by_account, 'editor-one'), (by_role, 'editor-two'), (second_session, 'editor-three')]:
+        second_session = self.login(groups=['mcp-personal'])
+        for client, editor_id in [(by_personal_group, 'editor-one'), (by_role, 'editor-two'), (second_session, 'editor-three')]:
             self.json(self.mcp_post(client, {'type': 'heartbeat', 'editor': {'editorId': editor_id, 'editorNumber': 12345}}))
-        token = self.json(self.mcp_post(by_account, {'type': 'pair'}))['token']
+        token = self.json(self.mcp_post(by_personal_group, {'type': 'pair'}))['token']
         auth = {'Authorization': 'Bearer ' + token}
         result = self.raw(anonymous, path=self.mcp_path, headers=auth)
         self.assertNotIn('set-cookie', result[1])
@@ -99,14 +102,13 @@ class CadHTTPTest(base.IntegratedStorageTest):
             self.json(self.mcp_post(anonymous, {'type': 'command', 'action': 'get_scene', 'editorId': editor}, headers=auth), 404)
         self.json(self.mcp_post(by_role, {'type': 'poll', 'editorId': 'editor-one'}))
 
-        rotated = self.json(self.mcp_post(by_account, {'type': 'pair'}))['token']
+        rotated = self.json(self.mcp_post(by_personal_group, {'type': 'pair'}))['token']
         self.json(self.raw(anonymous, path=self.mcp_path, headers=auth), 403)
         auth = {'Authorization': 'Bearer ' + rotated}
         self.assertEqual(self.raw(anonymous, path=self.mcp_path, headers=auth)[0], 200)
-        self.mcp_rules(roles=['ROLE_TEACHER'])
+        self.seed_permissions(role_grant)
         self.json(self.raw(anonymous, path=self.mcp_path, headers=auth), 403)
-        self.json(self.mcp_post(by_account, {'type': 'poll', 'editorId': 'editor-one'}), 403)
-        self.mcp_rules(roles=['ROLE_TEACHER'])
+        self.json(self.mcp_post(by_personal_group, {'type': 'poll', 'editorId': 'editor-one'}), 403)
         teacher_token = self.json(self.mcp_post(by_role, {'type': 'pair'}))['token']
         teacher_auth = {'Authorization': 'Bearer ' + teacher_token}
         self.login(base.U2, ['ROLE_STUDENT'])
@@ -114,8 +116,9 @@ class CadHTTPTest(base.IntegratedStorageTest):
 
     @unittest.skipUnless(OPTIONS.candidate, 'Pass the verified real candidate to exercise Chromium')
     def test_mcp_browser_and_stdio(self):
-        account = self.login()
-        self.mcp_rules(accounts=[account.owner])
+        account = self.login(groups=['mcp-personal'])
+        self.enable_mcp()
+        self.seed_permissions(('group:mcp-personal', '', 'mcp', 'allow'))
         with TemporaryDirectory(prefix='sso-cad-mcp-browser-') as temp:
             client = subprocess.check_output(
                 ['python3', str(ROOT/'scripts/prepare-mcp-client.py'),
@@ -191,6 +194,7 @@ class CadHTTPTest(base.IntegratedStorageTest):
         for value in ['Account: schueler&lt;&amp;', 'Name: Test &lt;Schüler&gt;', 'Klasse: 5a, 6b']:
             self.assertIn(value.encode(), account[2])
         self.assertIn('Klasse: –'.encode(), other.request('/konto/')[2])
+        self.seed_permissions(*self.ownership_rules(base.MAKER))
         owners = self.json(self.raw(maker, path='/owners.php?cad=1'))['owners']
         entry = next(item for item in owners if item['userId'] == student.owner)
         self.assertEqual(entry['classes'], ['5a', '6b'])
@@ -205,6 +209,7 @@ class CadHTTPTest(base.IntegratedStorageTest):
         inactive = self.login(base.U2)
         maker = self.login(base.UM, ['ROLE_TEACHER'], [base.MAKER])
         admin = self.login(base.UA, ['ROLE_TEACHER'], [base.ADMIN])
+        self.seed_permissions(*self.ownership_rules(base.MAKER, base.ADMIN))
 
         def recent(owner):
             entries = self.json(self.raw(admin, path='/owners.php?cad=1'))['owners']
@@ -246,6 +251,7 @@ class CadHTTPTest(base.IntegratedStorageTest):
         teacher = self.login(base.U2, ['ROLE_TEACHER'])
         maker = self.login(base.UM, ['ROLE_TEACHER'], [base.MAKER])
         admin = self.login(base.UA, ['ROLE_TEACHER'], [base.ADMIN])
+        self.seed_permissions(*self.ownership_rules(base.MAKER, base.ADMIN))
         route = '/cad.php?owner=' + student.owner
         status, _, html = self.raw(maker, path=route)
         self.assertEqual(status, 200)
@@ -279,6 +285,7 @@ class CadHTTPTest(base.IntegratedStorageTest):
         teacher=self.login('66666666-6666-6666-6666-666666666666', ['ROLE_TEACHER'], ['cad-class'], display_name='Änne Lehrkraft')
         maker = self.login(base.UM, ['ROLE_TEACHER'], [base.MAKER])
         admin = self.login(base.UA, ['ROLE_TEACHER'], [base.ADMIN])
+        self.seed_permissions(*self.ownership_rules(base.MAKER, base.ADMIN), self.publisher_rule())
         (self.private/'projects'/a.owner/Path(*['depth']*13)).mkdir(parents=True)
         [occt_index] = (OPTIONS.candidate/'public/occt').glob('*/index.js')
         payload = {'origin':self.origin, 'cookies':a.cookies, 'otherCookies':b.cookies,
@@ -310,8 +317,9 @@ def mcp_demo():
     try:
         demo.setUpClass()
         demo.setUp()
-        account = demo.login(display_name='MCP-Testkonto')
-        demo.mcp_rules(accounts=[account.owner])
+        account = demo.login(display_name='MCP-Testkonto', groups=['mcp-personal'])
+        demo.enable_mcp()
+        demo.seed_permissions(('group:mcp-personal', '', 'mcp', 'allow'))
         payload = {'origin': demo.origin, 'cookies': account.cookies, 'demo': True}
         command = ['node', str(ROOT/'tests/cad_browser_test.mjs')]
         with subprocess.Popen(command, stdin=subprocess.PIPE, text=True, start_new_session=True) as browser:

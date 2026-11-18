@@ -16,7 +16,7 @@ final class McpTest
         $this->native = $storage->session($private);
     }
 
-    public static function rules(string $private, StorageConfig $storage): ?array
+    public static function isEnabled(string $private, StorageConfig $storage): bool
     {
         if ($storage->secure && PHP_SAPI === 'fpm-fcgi') {
             $path = $private . '/mcp.json';
@@ -24,13 +24,22 @@ final class McpTest
             && ($_SERVER['REMOTE_ADDR'] ?? null) === '127.0.0.1') {
             $path = $private . '/app/mcp-test.json';
         } else {
-            return null;
+            return false;
         }
         if (is_link($path) || !is_file($path) || ($storage->secure && (fileperms($path) & 0077) !== 0)
             || filesize($path) > 16384) {
-            return null;
+            return false;
         }
-        $rules = json_decode((string)file_get_contents($path), true);
+        $configuration = json_decode((string)file_get_contents($path), true);
+        if (!is_array($configuration)) {
+            return false;
+        }
+        if (array_key_exists('enabled', $configuration)) {
+            return $configuration['enabled'] === true;
+        }
+        // A valid legacy file keeps the bridge enabled for existing installations.
+        // Its allow and deny lists no longer determine access.
+
         $formats = [
             'accounts' => '/^[a-f0-9]{32}$/D',
             'roles' => '/^[A-Za-z0-9_.:-]{1,100}$/D',
@@ -38,18 +47,18 @@ final class McpTest
         ];
         foreach (['allow', 'deny'] as $effect) {
             foreach ($formats as $key => $pattern) {
-                $values = $rules[$effect][$key] ?? null;
+                $values = $configuration[$effect][$key] ?? null;
                 if (!is_array($values) || !array_is_list($values)) {
-                    return null;
+                    return false;
                 }
                 foreach ($values as $value) {
                     if (!is_string($value) || preg_match($pattern, $value) !== 1) {
-                        return null;
+                        return false;
                     }
                 }
             }
         }
-        return $rules;
+        return true;
     }
 
     private static function reply(array $data, int $status = 200): never
@@ -110,8 +119,8 @@ final class McpTest
 
     private function permits(array $session): bool
     {
-        $rules = self::rules($this->private, $this->storage);
-        return $rules !== null && (new SsoPolicy($this->private, $this->storage->values))->allowsMcpTest($session['userId'], $rules);
+        return self::isEnabled($this->private, $this->storage)
+            && (new SsoPolicy($this->private, $this->storage->values))->allowsMcpTest($session['userId']);
     }
 
     public function run(): never
@@ -122,7 +131,7 @@ final class McpTest
         header('X-Content-Type-Options: nosniff');
         header('Cross-Origin-Resource-Policy: same-origin');
         $this->storage->assertRequest($this->private);
-        if (self::rules($this->private, $this->storage) === null) {
+        if (!self::isEnabled($this->private, $this->storage)) {
             Gateway::fail(404, 'mcp_test_unavailable');
         }
         $method = $_SERVER['REQUEST_METHOD'] ?? '';

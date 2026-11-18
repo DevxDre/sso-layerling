@@ -1,4 +1,1 @@
-{
-  "allow": {"accounts": [], "roles": [], "groups": []},
-  "deny": {"accounts": [], "roles": [], "groups": []}
-}
+{"enabled": true}

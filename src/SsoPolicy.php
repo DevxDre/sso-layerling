@@ -143,8 +143,7 @@ final class SsoPolicy
         $this->requireActor($actor);
         $record = $this->record($actor);
         return [
-            'teacher' => $this->permissions->decision('publish', $record)
-                ?? (array_intersect($record['roles'], $this->config['templatePublisherRoleIds'] ?? []) !== []),
+            'teacher' => $this->permissions->decision('publish', $record) === true,
             'publishGroups' => $this->permissions->templateGroups($record),
             'labels' => $record['groupLabels'] ?? [],
             'student' => $record['student'],
@@ -152,33 +151,19 @@ final class SsoPolicy
         ];
     }
 
-    public function allowsMcpTest(string $actor, array $rules): bool
+    public function allowsMcpTest(string $actor): bool
     {
         $record = $this->record($actor);
-        if (($record['enabled'] ?? null) !== true) {
-            return false;
-        }
-        $matches = static fn(array $rule): bool => in_array($actor, $rule['accounts'], true)
-            || array_intersect($record['roles'], $rule['roles']) !== []
-            || array_intersect($record['groups'], $rule['groups']) !== [];
-        return $this->permissions->decision('mcp', $record)
-            ?? (!$matches($rules['deny']) && $matches($rules['allow']));
+        return ($record['enabled'] ?? null) === true && $this->permissions->decision('mcp', $record) === true;
     }
-    private function group(array $record,string $kind): bool
-    {
-        $id=$this->config['groupIds'][$kind]??null;
-        return is_string($id)&&in_array($id,$record['groups'],true);
-    }
+
     private function allowed(string $actor, string $owner, string $operation): bool
     {
         if ($actor === $owner) { return true; }
         $subject = $this->record($owner);
         $principal = $this->record($actor);
         if ($subject === null || $principal === null || in_array($operation, ['settings-read','settings-write'], true)) { return false; }
-        $decision = $this->permissions->decision($operation, $principal, $subject);
-        if ($decision !== null) { return $decision; }
-        if ($this->group($principal, 'admins')) { return true; }
-        return $this->group($principal, 'makerspace') && $subject['enabled'] && $subject['student'] && $operation !== 'delete';
+        return $this->permissions->decision($operation, $principal, $subject) === true;
     }
     public function authorize(string $actor, string $owner, string $operation): void
     {

@@ -21,7 +21,7 @@ Anmeldeserver enthält `provider` alle folgenden Felder.
 | `claims.roles` | Claim mit `format` `strings` für eine Liste von Rollenkennungen oder `objects` mit einem konfigurierten `id`-Feld |
 | `claims.groups` | Claim mit `format` `strings`, `objects` oder `map`. Bei `map` muss der Objektschlüssel der Gruppen-ID im `id`-Feld entsprechen. `label` und `account` sind optionale Felder für Objektformate |
 | `classPrefixes` | Geordnete Liste der Präfixe für Klassen und Kurse aus dem Gruppenfeld `account`, etwa `["cohort-", "course-"]`. Das erste passende Präfix wird entfernt |
-| `templatePublisherRoleIds` | Geprüfte Rollenkennungen, die Vorlagen für eigene Gruppen veröffentlichen dürfen. Eine leere Liste deaktiviert das Veröffentlichen |
+| `templatePublisherRoleIds` | Kompatibilitätsfeld für bestehende Profile. Freigaben für Vorlagen werden auf der Rechteseite vergeben |
 
 Claim-Schlüssel beziehen sich auf die oberste Ebene von ID-Token oder gebundener
 UserInfo. Überlappende Identitäts-, Rollen- und Gruppen-Claims müssen zwischen beiden
@@ -41,13 +41,11 @@ passendem `sub` unterstützen. Die RSA-Schlüssel im JWKS brauchen `alg: RS256`,
 - `studentRoleId` und `groupBindings.students` steuern die Schülerzuordnung. Eine
   nichtleere Rollenliste hat Vorrang. Ohne Rollen greifen die Schülergruppen.
   `studentRoleId: null` schaltet die rollenbasierte Schülerzuordnung ab.
-- `groupBindings.makerspace` und `groupBindings.admins` erwarten unterschiedliche,
-  nachgewiesene Gruppen-IDs. Betreuung darf Schülerdateien bearbeiten. Admin-Dateirechte
-  umfassen alle Konten und das Löschen.
-- `diagnosticGroupIds` beschränkt die Gruppenanzeige auf exakte IDs. Standard sind die
-  beiden Gruppen für Betreuung und Admin-Dateirechte. `[]` blendet Gruppen aus.
-- Die [lokalen MCP-Regeln](mcp-test.md) verwenden dieselben normalisierten Rollen- und
-  Gruppen-IDs sowie die internen Eigentümer-IDs.
+- `groupBindings.makerspace` und `groupBindings.admins` werden für bestehende
+  Deployment-Dateien und Diagnosevorgaben eingelesen. Freigaben für fremde
+  Konten, Vorlagenverteilung und MCP werden auf der Rechteseite vergeben.
+- `diagnosticGroupIds` beschränkt die Gruppenanzeige auf exakte IDs. Standard sind
+  die beiden früheren Betreuungs- und Admin-Gruppen. `[]` blendet Gruppen aus.
 
 Für Rechte zählen ausschließlich die geprüften Kennungen. Gruppentitel, Benutzername,
 Name und die aus Gruppen abgeleiteten Klassen werden für die Anzeige verwendet.

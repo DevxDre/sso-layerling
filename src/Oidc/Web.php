@@ -284,8 +284,8 @@ final class Web
         $selected = $policy->owner($actor, $_GET['owner'] ?? $actor);
         $owners = $policy->owners($actor, true);
         $templateAccess = $policy->templateAccess($actor);
-        $mcpRules = \Sso\Layerling\McpTest::rules($this->private, $this->storage);
-        $mcpTest = $selected['isSelf'] && $mcpRules !== null && $policy->allowsMcpTest($actor, $mcpRules);
+        $mcpTest = $selected['isSelf'] && \Sso\Layerling\McpTest::isEnabled($this->private, $this->storage)
+            && $policy->allowsMcpTest($actor);
         $canManagePermissions = $policy->isPermissionsAdmin($actor, $this->config->adminRole);
         unset($policy);
         session_write_close();

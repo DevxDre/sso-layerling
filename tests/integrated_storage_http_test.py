@@ -135,6 +135,23 @@ class IntegratedStorageTest(unittest.TestCase):
         return self.raw(client, 'POST', '/vorlagen.php?action=publish', b''.join(body),
                         {'Content-Type': f'multipart/form-data; boundary={boundary}'}, **options)
 
+    def seed_permissions(self, *rules):
+        records = [dict(actor=actor, owner=owner, operation=operation, effect=effect)
+                   for actor, owner, operation, effect in rules]
+        (self.private/'permissions.json').write_text(json.dumps({'version': 1, 'rules': records, 'patterns': []}))
+
+    def ownership_rules(self, *groups):
+        for group in groups:
+            actor = 'group:' + self.provider_group(group)
+            roles = ['ROLE_STUDENT'] if group == MAKER else ['ROLE_STUDENT', 'ROLE_TEACHER']
+            operations = ['read', 'write'] if group == MAKER else ['read', 'write', 'delete']
+            for role in roles:
+                for operation in operations:
+                    yield (actor, 'role:' + self.provider_role(role), operation, 'allow')
+
+    def publisher_rule(self):
+        return ('role:' + self.provider_role('ROLE_TEACHER'), '', 'publish', 'allow')
+
     def change_rule(self, admin, operation, actor, *, owner='', effect='allow', group_names_version=''):
         form = {'csrf': admin.csrf, 'action': 'save-rule', 'operation': operation,
                 'actor': actor, 'owner': owner, 'effect': effect, 'groupNamesVersion': group_names_version}
@@ -170,6 +187,10 @@ class IntegratedStorageTest(unittest.TestCase):
         teacher_role = 'role:' + self.provider_role('ROLE_TEACHER')
         subject_role = 'role:' + self.provider_role('ROLE_STUDENT')
         self.json(self.raw(operator, path=filename), 403)
+        self.json(self.raw(legacy_admin, path=filename), 403)
+        self.json(self.upload(legacy_admin, 'denied', learner.owner, name='legacy.lyl'), 403)
+        self.json(self.raw(legacy_admin, 'DELETE', filename, headers=delete_headers), 403)
+        self.assertEqual(len(self.json(self.raw(legacy_admin, path='/owners.php'))['owners']), 1)
         self.change_rule(operator, 'read', teacher_role, owner='groups:makerspace-lab',
                          group_names_version=group_names_version)
         saved = json.loads((self.private/'permissions.json').read_text())['rules']
@@ -241,12 +262,14 @@ class IntegratedStorageTest(unittest.TestCase):
         self.assertIn(b'data-copy-template', self.raw(learner, path='/vorlagen.php')[2])
 
         config_path = self.private/'app/mcp-test.json'
-        config_path.write_text(json.dumps({effect: {'accounts': [], 'roles': [], 'groups': []} for effect in ['allow', 'deny']}))
+        legacy = {'accounts': [instructor.owner], 'roles': [], 'groups': []}
+        config_path.write_text(json.dumps({'allow': legacy, 'deny': dict(legacy, accounts=[])}))
         self.addCleanup(config_path.unlink, missing_ok=True)
         mcp = '/api/layerling-mcp'
         def pair():
             return self.raw(instructor, 'POST', mcp, '{"type":"pair"}', {'Content-Type': 'application/json'})
         self.json(pair(), 403)
+        config_path.write_text(json.dumps({'allow': dict(legacy, accounts=[]), 'deny': legacy}))
         self.change_rule(operator, 'mcp', 'group:target')
         token = self.json(pair())['token']
         bearer = {'Authorization': 'Bearer ' + token}
@@ -262,6 +285,9 @@ class IntegratedStorageTest(unittest.TestCase):
         student = self.login(U1, groups=['class-b'])
         outsider = self.login(U2, groups=['class-c'])
         admin = self.login(UM, ['ROLE_ADMIN'], [ADMIN, 'class-a'])
+        self.json(self.raw(teacher, path=path), 403)
+        self.json(self.publish_template(teacher, ['class-a']), 403)
+        self.seed_permissions(self.publisher_rule())
         teacher_page = self.raw(teacher, path=path)
         self.assertEqual(teacher_page[0], 200)
         self.assertIn(b'Fixture class-a', teacher_page[2])
@@ -352,6 +378,7 @@ class IntegratedStorageTest(unittest.TestCase):
     def test_group_claim_change_requires_fresh_privileges_and_keeps_student_owner(self):
         student = self.login()
         mentor = self.login(UM, ['ROLE_TEACHER'], [MAKER])
+        self.seed_permissions(*self.ownership_rules(MAKER))
         self.json(self.upload(student, 'existing student'), 201)
         personal = '/store.php?fileName=same.lyl'
         foreign = personal + '&' + urlencode({'_sso_owner': student.owner})
@@ -375,6 +402,12 @@ class IntegratedStorageTest(unittest.TestCase):
                 'verified_memberships': [{'key': self.provider_group(MAKER)}],
             })
             self.assertEqual(refreshed.request(callback)[0], 303)
+            self.json(self.raw(refreshed, path=foreign), 403)
+            refreshed_student = sso.Client(self)
+            callback, _ = self.begin(refreshed_student, claims={
+                'sub': 'pairwise-' + U1, 'permissions': ['learner'], 'verified_memberships': [],
+            })
+            self.assertEqual(refreshed_student.request(callback)[0], 303)
             self.assertEqual(self.raw(refreshed, path=foreign)[2], project('existing student'))
             owners = self.json(self.raw(refreshed, path='/owners.php'))['owners']
             self.assertEqual(next(owner['userId'] for owner in owners if owner['isSelf']), mentor.owner)
@@ -386,6 +419,7 @@ class IntegratedStorageTest(unittest.TestCase):
         teacher = self.login(UA, ['ROLE_TEACHER'], ['class-b'])
         student = self.login(U1, groups=['class-b'])
         self.json(self.upload(student, 'stored before profile update'), 201)
+        self.seed_permissions(self.publisher_rule())
         self.assertEqual(self.publish_template(teacher, ['class-b'])[0], 201)
         profile = self.private/'app/oidc-profile.json'
         original = profile.read_text()
@@ -432,6 +466,8 @@ class IntegratedStorageTest(unittest.TestCase):
         a=self.login(U1);b=self.login(U2);teacher=self.login(UA,['ROLE_TEACHER'])
         record=self.json(self.upload(a,'student'),201)['project']
         maker=self.login(UM,['ROLE_TEACHER'],[MAKER])
+        self.assertEqual(len(self.json(self.raw(maker,path='/owners.php'))['owners']), 1)
+        self.seed_permissions(*self.ownership_rules(MAKER))
         owners=self.json(self.raw(maker,path='/owners.php'))['owners'];ids={o['userId']for o in owners}
         self.assertEqual(ids,{a.owner,b.owner,maker.owner});self.assertNotIn(teacher.owner,ids)
         self.assertFalse(next(o['canDelete']for o in owners if o['userId']==a.owner))
@@ -440,9 +476,10 @@ class IntegratedStorageTest(unittest.TestCase):
         self.json(self.raw(maker,'DELETE','/store.php?'+urlencode({'_sso_owner':a.owner,'fileName':'same.lyl'})),403)
         self.json(self.raw(maker,path='/store.php?'+urlencode({'_sso_owner':teacher.owner})),403)
         self.json(self.raw(maker,path='/store.php?'+urlencode({'_sso_owner':a.owner,'settings':'default'})),403)
-    def test_05_admin_precedence_all_owners_and_delete(self):
+    def test_05_explicit_admin_rules_allow_selected_owners_and_delete(self):
         a=self.login(U1);teacher=self.login(U2,['ROLE_TEACHER']);self.json(self.upload(teacher,'teacher'),201)
         admin=self.login(UA,['ROLE_TEACHER','ROLE_ADMIN','ROLE_TEACH_AKTIV'],[MAKER,ADMIN])
+        self.seed_permissions(*self.ownership_rules(ADMIN))
         owners=self.json(self.raw(admin,path='/owners.php'))['owners']
         self.assertEqual({o['userId']for o in owners},{a.owner,teacher.owner,admin.owner});self.assertTrue(all(o['canDelete']for o in owners))
         record=self.json(self.raw(admin,path='/store.php?'+urlencode({'_sso_owner':teacher.owner})))['projects'][0]
@@ -450,6 +487,7 @@ class IntegratedStorageTest(unittest.TestCase):
         self.assertFalse((self.private/'projects'/teacher.owner/'same.lyl').exists())
     def test_06_new_owner_login_changes_student_status_without_changing_files(self):
         a=self.login(U1);self.json(self.upload(a,'keep'),201);maker=self.login(UM,['ROLE_TEACHER'],[MAKER])
+        self.seed_permissions(*self.ownership_rules(MAKER))
         query='/store.php?'+urlencode({'_sso_owner':a.owner,'fileName':'same.lyl'});self.assertEqual(self.raw(maker,path=query)[0],200)
         changed=self.login(U1,['ROLE_TEACHER']);self.assertEqual(changed.owner,a.owner)
         self.json(self.raw(maker,path=query),403)
@@ -457,6 +495,7 @@ class IntegratedStorageTest(unittest.TestCase):
         self.assertEqual(self.raw(a,path='/store.php?fileName=same.lyl')[2],project('keep'))
     def test_07_group_revocation_applies_to_existing_native_session(self):
         a=self.login(U1);maker=self.login(UM,['ROLE_TEACHER'],[MAKER])
+        self.seed_permissions(*self.ownership_rules(MAKER))
         self.json(self.raw(maker,path='/store.php?'+urlencode({'_sso_owner':a.owner})))
         changed=self.login(UM,['ROLE_ADMIN'],[]);self.assertEqual(changed.owner,maker.owner)
         self.json(self.raw(maker,path='/store.php?'+urlencode({'_sso_owner':a.owner})),403)

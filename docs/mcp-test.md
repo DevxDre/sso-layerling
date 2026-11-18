@@ -10,14 +10,13 @@ PHP-Wrapper. Den Editor und die CAD-Werkzeuge liefert der in
 Der CAD-Build enthält den Endpunkt `/mcp.php` für HTTPS und PHP-FPM. MCP ist
 anfangs deaktiviert. Kopiere [`config/mcp.example.json`](../config/mcp.example.json)
 als `mcp.json` in das private Laufzeitverzeichnis neben `principals.json`.
-Setze die Dateirechte auf `0600`. Das JSON enthält Berechtigungsregeln ohne Token.
-
-- `accounts` erwartet interne 32-stellige SSO-Eigentümer-IDs.
-- `roles` und `groups` erwarten die verifizierten Kennungen aus dem konfigurierten
-  OIDC-Profil. Verwende die Kennungen aus der eigenen Installation.
-- Mindestens eine passende Regel unter `allow` ist erforderlich. Ein
-  passender Eintrag unter `deny` hat Vorrang. Die Beispielkonfiguration sperrt
-  alle Konten. Das Entfernen der Regeldatei deaktiviert MCP.
+Setze die Dateirechte auf `0600`. Die Datei schaltet mit `{"enabled": true}`
+die Brücke ein. Eine bereits vorhandene gültige Konfiguration im alten Format
+schaltet sie ebenfalls ein. Die Rechte für einzelne Rollen und Gruppen werden
+auf [der Rechteseite](sso-berechtigungsmodell.md#rechte-über-die-oberfläche-verwalten)
+mit „MCP-Token erstellen“ vergeben. Die bisherigen MCP-Listen erteilen und
+sperren keine Kontenrechte mehr. Entferne die Datei oder setze
+`{"enabled": false}`, um die Brücke abzuschalten.
 
 Der Wrapper prüft bei jedem Zugriff die Sitzung und die MCP-Freigabe.
 Die Kopplung ist im eigenen Projektbereich verfügbar. Öffne dort einen

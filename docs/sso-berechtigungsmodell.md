@@ -1,7 +1,8 @@
 # Berechtigungsmodell ausschließlich aus SSO
 
 Stand: 03.11.2026. Aktuelle Nutzerentscheidung, ersetzt den vorgeschlagenen IDM-Abgleich.
-Dies ist das Zielmodell für die weitere Implementierung, noch kein neuer Laufzeitnachweis.
+Die folgenden Abschnitte dokumentieren die damalige Fachentscheidung.
+Für die aktuelle Autorisierung gilt [Rechte über die Oberfläche verwalten](#rechte-über-die-oberfläche-verwalten).
 
 ## Bestätigt
 
@@ -106,13 +107,14 @@ direkt unter `/rechte.php`.
   Die Regeln bleiben an die Gruppen-ID gebunden.
   Wähle für fremde Dateizugriffe zusätzlich die Gruppe oder Rolle der Zielkonten.
   Auflisten und Lesen, Bearbeiten und Löschen lassen sich einzeln freigeben oder sperren.
-- Bei mehreren passenden Regeln hat „Verbieten“ Vorrang. Ohne Treffer greift für
-  die jeweilige Aktion die bisherige Konfiguration. Eigene Dateien und persönliche
-  Einstellungen behalten ihre bisherige Behandlung.
-- Die Rechte für Vorlagen und MCP können nach Gruppe oder Rolle gesetzt werden.
-  MCP setzt weiterhin eine für die Installation aktivierte Brücke mit gültiger
-  privater MCP-Konfiguration voraus. Wenn eine passende Regel vorhanden ist,
-  entscheidet sie anstelle der bisherigen MCP-Freigabeliste.
+- Bei mehreren passenden Regeln hat „Verbieten“ Vorrang. Jede Aktion für ein
+  fremdes Konto erfordert eine passende Freigabe in der Rechteverwaltung.
+  Das gilt auch für Mitglieder der früheren Betreuungs- oder Admin-Gruppen.
+  Eigene Dateien und persönliche Einstellungen behalten ihre bisherige Behandlung.
+- Das Verteilen von Vorlagen und das Erstellen und Verwenden von MCP-Tokens
+  erfordern ebenfalls eine passende Freigabe in der Rechteverwaltung.
+  MCP setzt zusätzlich eine aktivierte Brücke mit gültiger privater MCP-Konfiguration voraus.
+  Bestehende Vorlagen bleiben für die vorgesehenen Empfänger verfügbar.
 - Gruppenmuster filtern die beim Verteilen auswählbaren eigenen Gruppen.
   `makerspace^` sucht nach Gruppenaccounts mit dem Präfix `makerspace`.
   Ohne abschließendes `^` gilt exakte Übereinstimmung. Liefert der Anmeldeserver

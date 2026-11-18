@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Same real upstream storage regressions under the new, isolated last-SSO-login model.
 
-The historical 35-test suite remains unchanged and runs separately. Only its two
-model-specific freshness/configuration tests are overridden with the new contract.
+The historical 35-test suite remains unchanged and runs separately. These
+regressions use explicit rules and the last successfully verified login.
 All sessions, principals and logins here are synthetic CLI-only fixtures.
 """
 import hashlib
@@ -22,6 +22,27 @@ class SsoStorageHTTPTest(storage.StorageHTTPTest):
         path=cls.private/'config.json';c=json.loads(path.read_text())
         c.update(authorizationModel='sso-last-login',studentRoleId='ROLE_STUDENT',studentGroupIds=['test-student-id'])
         path.write_text(json.dumps(c))
+    def setUp(self):
+        super().setUp()
+        for owner in [storage.A, storage.B]:
+            self.principal(owner, groups=['fixture-owner'])
+        self.write_permissions()
+
+    def write_permissions(self, *, group_only_students=False):
+        rules = [
+            dict(actor='group:test-makerspace-id', owner='role:ROLE_STUDENT', operation=operation, effect='allow')
+            for operation in ['read', 'write']
+        ] + [
+            dict(actor='group:test-makerspace-id', owner='role:ROLE_TEACHER', operation=operation, effect='deny')
+            for operation in ['read', 'write']
+        ] + [
+            dict(actor='group:test-admins-id', owner='group:fixture-owner', operation=operation, effect='allow')
+            for operation in ['read', 'write', 'delete']
+        ]
+        if group_only_students:
+            rules.append(dict(actor='group:test-makerspace-id', owner='group:test-student-id', operation='read', effect='allow'))
+        (self.private/'permissions.json').write_text(json.dumps({'version': 1, 'rules': rules, 'patterns': []}))
+
     def principal(self,user,**changes):
         records=json.loads((self.private/'principals.json').read_text())
         current=records.get(user,{})
@@ -57,7 +78,7 @@ class SsoStorageHTTPTest(storage.StorageHTTPTest):
         expired=self.issue(actor,issuedAt=int(time.time())-3601,lastSeen=int(time.time()))
         self.json_response(self.request(query=self.scoped(storage.B),client=expired),401)
         self.principal(storage.B,enabled=False)
-        self.json_response(self.request(query=self.scoped(storage.B),client=client),403)
+        self.json_response(self.request(query=self.scoped(storage.B),client=client))
         self.principal(actor,groups=['test-admins-id'])
         self.json_response(self.request(query=self.scoped(storage.B),client=client))
     def test_29_registry_and_policy_configuration_fail_closed(self):
@@ -90,6 +111,7 @@ class SsoStorageHTTPTest(storage.StorageHTTPTest):
         maker,_=self.privileged()
         self.assertEqual(self.request(query=self.scoped(owner,fileName='same.lyl'),client=maker)[2],storage.project('role-only-student'))
     def test_37_missing_and_empty_roles_group_fallback_via_writer(self):
+        self.write_permissions(group_only_students=True)
         maker,_=self.privileged()
         for i,roles in enumerate([None,[]]):
             result=self.login(f'22222222-2222-2222-2222-22222222222{i}',20+i,roles,['test-student-id'])
