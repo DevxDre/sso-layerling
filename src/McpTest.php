@@ -3,11 +3,11 @@ declare(strict_types=1);
 
 namespace Sso\Layerling;
 
-/** Local, opt-in bridge for the pinned Layerling editor and its stdio client. */
+/** Opt-in bridge for the pinned Layerling editor and its stdio client. */
 final class McpTest
 {
     private const MAX_BODY = 4 * 1024 * 1024;
-    private const TOKEN_SECONDS = 1800;
+    private const TEST_TOKEN_SECONDS = 1800;
     private const EDITOR_SECONDS = 15;
     private readonly NativeSession $native;
 
@@ -18,12 +18,16 @@ final class McpTest
 
     public static function rules(string $private, StorageConfig $storage): ?array
     {
-        if (!defined('SSO_LAYERLING_MCP_TEST_ROUTER') || PHP_SAPI !== 'cli-server' || $storage->secure
-            || ($_SERVER['REMOTE_ADDR'] ?? null) !== '127.0.0.1') {
+        if ($storage->secure && PHP_SAPI === 'fpm-fcgi') {
+            $path = $private . '/mcp.json';
+        } elseif (!$storage->secure && PHP_SAPI === 'cli-server' && defined('SSO_LAYERLING_MCP_TEST_ROUTER')
+            && ($_SERVER['REMOTE_ADDR'] ?? null) === '127.0.0.1') {
+            $path = $private . '/app/mcp-test.json';
+        } else {
             return null;
         }
-        $path = $private . '/app/mcp-test.json';
-        if (is_link($path) || !is_file($path) || filesize($path) > 16384) {
+        if (is_link($path) || !is_file($path) || ($storage->secure && (fileperms($path) & 0077) !== 0)
+            || filesize($path) > 16384) {
             return null;
         }
         $rules = json_decode((string)file_get_contents($path), true);
@@ -161,10 +165,13 @@ final class McpTest
         if ($origin === null || !hash_equals($session['csrf'], $csrf)) {
             Gateway::fail(403, 'csrf_rejected');
         }
-        $this->browser(session_id(), $body);
+        $expiresAt = $this->storage->secure
+            ? $session['issuedAt'] + StorageConfig::ABSOLUTE_SECONDS
+            : time() + self::TEST_TOKEN_SECONDS;
+        $this->browser(session_id(), $body, $expiresAt);
     }
 
-    private function browser(string $sessionId, array $body): never
+    private function browser(string $sessionId, array $body, int $expiresAt): never
     {
         $type = $body['type'] ?? null;
         if (!in_array($type, ['pair', 'heartbeat', 'poll', 'result'], true)) {
@@ -172,7 +179,7 @@ final class McpTest
         }
         $editor = (array)($body['editor'] ?? []);
         $editorId = $type === 'pair' ? null : self::id($type === 'heartbeat' ? ($editor['editorId'] ?? null) : ($body['editorId'] ?? null));
-        $reply = $this->state(static function (array &$state) use ($sessionId, $type, $editor, $editorId, $body) {
+        $reply = $this->state(static function (array &$state) use ($sessionId, $type, $editor, $editorId, $body, $expiresAt) {
             if (!isset($state[$sessionId]) && count($state) >= 16) {
                 return null;
             }
@@ -181,7 +188,7 @@ final class McpTest
             if ($type === 'pair') {
                 $token = bin2hex(random_bytes(32));
                 $entry['tokenHash'] = hash('sha256', $token);
-                $entry['tokenExpiresAt'] = time() + self::TOKEN_SECONDS;
+                $entry['tokenExpiresAt'] = $expiresAt;
                 unset($entry['command']);
                 return ['token' => $token, 'expiresAt' => $entry['tokenExpiresAt']];
             }
@@ -249,6 +256,20 @@ final class McpTest
         if ($session === null || !$this->permits($session)) {
             Gateway::fail(403, 'mcp_access_denied');
         }
+        if ($method === 'GET' && $this->storage->secure && array_key_exists('command', $_GET)) {
+            $id = $_GET['command'];
+            if (!is_string($id) || preg_match('/^[a-f0-9]{32}$/D', $id) !== 1) {
+                Gateway::fail(400, 'invalid_mcp_command');
+            }
+            $outcome = $this->outcome($sessionId, $hash, $id);
+            if ($outcome === false) {
+                Gateway::fail(404, 'mcp_command_expired');
+            }
+            if ($outcome === null) {
+                self::reply(['commandId' => $id], 202);
+            }
+            $this->replyOutcome($outcome);
+        }
         if ($method === 'GET') {
             $editors = $this->state(static fn(array &$state) =>
                 ($state[$sessionId]['tokenHash'] ?? null) === $hash ? array_values($state[$sessionId]['editors']) : null);
@@ -297,21 +318,13 @@ final class McpTest
         if ($error !== null) {
             Gateway::fail(...$error);
         }
+        if ($this->storage->secure) {
+            self::reply(['commandId' => $command['id']], 202);
+        }
         session_write_close();
         while (microtime(true) < $deadline && !connection_aborted()) {
             usleep(150000);
-            $outcome = $this->state(static function (array &$state) use ($sessionId, $hash, $command) {
-                if (($state[$sessionId]['tokenHash'] ?? null) !== $hash
-                    || ($state[$sessionId]['command']['command']['id'] ?? null) !== $command['id']) {
-                    return false;
-                }
-                $entry = &$state[$sessionId];
-                $result = $entry['command']['result'] ?? null;
-                if ($result !== null) {
-                    unset($entry['command']);
-                }
-                return $result;
-            });
+            $outcome = $this->outcome($sessionId, $hash, $command['id']);
             if ($outcome === false) {
                 break;
             }
@@ -321,10 +334,30 @@ final class McpTest
                     ($state[$sessionId]['tokenHash'] ?? null) === $hash)) {
                     Gateway::fail(403, 'mcp_access_denied');
                 }
-                $result = (array)json_decode($outcome, false, 64, JSON_THROW_ON_ERROR);
-                self::reply($result, $result['ok'] ? 200 : 504);
+                $this->replyOutcome($outcome);
             }
         }
         Gateway::fail(504, 'mcp_command_expired');
+    }
+
+    private function outcome(string $sessionId, string $hash, string $id): string|false|null
+    {
+        return $this->state(static function (array &$state) use ($sessionId, $hash, $id) {
+            if (($state[$sessionId]['tokenHash'] ?? null) !== $hash
+                || ($state[$sessionId]['command']['command']['id'] ?? null) !== $id) {
+                return false;
+            }
+            $result = $state[$sessionId]['command']['result'] ?? null;
+            if ($result !== null) {
+                unset($state[$sessionId]['command']);
+            }
+            return $result;
+        });
+    }
+
+    private function replyOutcome(string $outcome): never
+    {
+        $result = (array)json_decode($outcome, false, 64, JSON_THROW_ON_ERROR);
+        self::reply($result, $result['ok'] ? 200 : 504);
     }
 }

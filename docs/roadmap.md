@@ -23,4 +23,4 @@ Der Abnahmevertrag für Änderungen an der Profilkonfiguration steht unten.
 ## Weitere Arbeit
 
 - Den dokumentierten sporadischen Browserkonflikt beim Kopieren einer Vorlage untersuchen.
-- Die lokale MCP-Anbindung vor einer gehosteten Freigabe separat unter PHP-FPM prüfen.
+- Neue gehostete MCP-Installationen unter PHP-FPM mit dem jeweiligen OIDC-Profil abnehmen.

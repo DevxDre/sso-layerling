@@ -61,7 +61,7 @@ class CadBuildTest(unittest.TestCase):
             self.assertEqual(cad.digest((public/name).read_bytes()), expected)
         self.assertIn(b'Gateway', (root/'private/app/src/Gateway.php').read_bytes())
         self.assertNotEqual(cad.digest((public/'store.php').read_bytes()),cad.pin()[0]['sha256'])
-        self.assertEqual({str(p.relative_to(public))for p in public.rglob('*.php')},{'index.php','_sso.php','store.php','session.php','owners.php','files.php','files/index.php','konto/index.php','cad.php','cad-session.php','vorlagen.php','auth/start.php','auth/callback.php','auth/logout.php'})
+        self.assertEqual({str(p.relative_to(public))for p in public.rglob('*.php')},{'index.php','_sso.php','store.php','session.php','owners.php','files.php','files/index.php','konto/index.php','cad.php','cad-session.php','mcp.php','vorlagen.php','auth/start.php','auth/callback.php','auth/logout.php'})
         self.assertFalse(any(p.name=='.env' for p in root.rglob('*')))
     def test_07_current_installer_refuses_candidate_even_with_commit(self):
         package=self.root/'unsupported';package.mkdir()

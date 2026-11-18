@@ -43,8 +43,9 @@ Die anschließende Einzelwiederholung bestand einschließlich STEP-/SVG-Download
 unabhängiger Schülerkopien. Diese Testauffälligkeit ist noch nicht abschließend geklärt.
 Historische Ergebnisse sind kein neuer Testlauf nach späteren Änderungen.
 
-Die lokale MCP-Anbindung ist mit synthetischen Konten geprüft. Eine gehostete Freigabe
-benötigt einen gesonderten PHP-FPM-Betriebstest. Anleitung: [MCP-Test](mcp-test.md).
+Die MCP-Brücke unterstützt die gehostete Freigabe unter PHP-FPM und die lokale
+Demo. Der gehostete Token endet mit der zugehörigen SSO-Sitzung. Der Client
+wird aus dem gepinnten Layerling-Stand erzeugt. Anleitung: [MCP](mcp-test.md).
 
 ## Abnahme der OIDC-Generalisierung
 

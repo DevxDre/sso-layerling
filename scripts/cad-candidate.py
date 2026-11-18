@@ -316,7 +316,7 @@ def package(source, layerling, output, installed_private=None, installed_public=
     bundle = output/'private/app/cad'; bundle.mkdir(mode=0o700)
     shutil.copyfile(export/'index.html', bundle/'index.html')
     (bundle/'manifest.json').write_text(json.dumps({'kind':'sso-layerling-cad-owner-v2',
-        'entryRoutes':'cad-first-v1', 'source':metadata, 'indexSha256':digest((bundle/'index.html').read_bytes())}, indent=2)+'\n')
+        'entryRoutes':'cad-first-v1', 'hostedMcp':True, 'source':metadata, 'indexSha256':digest((bundle/'index.html').read_bytes())}, indent=2)+'\n')
     shutil.copyfile(source/BUILD_MARKER, bundle/'build.json')
     # Exact verified export, with executable PHP and alternative app/HTML entry points excluded.
     excluded = {'index.html','index.txt','store.php','sw.js','manifest.webmanifest','support.html','view.html',
@@ -337,6 +337,7 @@ def package(source, layerling, output, installed_private=None, installed_public=
         shutil.copyfile(ROOT/'public'/name/'index.php', directory/'index.php')
     for suffix in ['js','css']: shutil.copyfile(ROOT/'cad'/('bridge.'+suffix), public/('cad-bridge.'+suffix))
     (public/'cad-session.php').write_text("<?php\ndeclare(strict_types=1);\nini_set('display_errors','0');\n(require '"+private+"/app/src/storage-bootstrap.php')->cadSession();\n")
+    (public/'mcp.php').write_text("<?php\ndeclare(strict_types=1);\nrequire '" + private + "/app/src/mcp-bootstrap.php';\n")
     manifest_path = output/'manifest.json'; manifest = json.loads(manifest_path.read_text())
     if hosted_test and not manifest['sourceCommit']:
         raise ValueError('CAD test packaging requires a clean committed wrapper')

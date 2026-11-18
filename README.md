@@ -35,9 +35,9 @@ App. Einrichtung und unterstützte Claim-Formate stehen im
 [OIDC-Profil](docs/oidc-profile.md).
 
 Die Anwendung setzt eine Internetverbindung voraus. Auf gemeinsam genutzten Geräten
-sind getrennte Browserprofile vorgesehen. Ein lokaler MCP-Teststand für die Steuerung
-des Editors ist ebenfalls enthalten; seine Anleitung und Grenzen stehen im
-[MCP-Testleitfaden](docs/mcp-test.md).
+sind getrennte Browserprofile vorgesehen. MCP lässt sich je Installation für
+freigegebene SSO-Konten aktivieren. Einrichtung und Client-Build stehen im
+[MCP-Leitfaden](docs/mcp-test.md).
 
 ## Voraussetzungen
 
@@ -109,7 +109,7 @@ vorgesehenen Pakettypen verwendet.
 | Statischer CAD-Editor | [CAD-Integration](docs/cad-integration.md) |
 | Hosting | [Voraussetzungen](docs/hosting-pruefung.md) |
 | Installation und bestehende Installationen | [Umstellung auf sso-layerling](docs/installation-und-migration.md) |
-| Experimentelle Editorsteuerung | [Lokaler MCP-Test](docs/mcp-test.md) |
+| SSO-gebundene Editorsteuerung | [MCP-Freigabe und Client](docs/mcp-test.md) |
 
 ## Mitwirken
 

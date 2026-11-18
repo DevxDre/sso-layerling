@@ -115,10 +115,16 @@ async function testMcp() {
   const {editors} = await call('layerling_list_editors');
   assert.equal(editors.length, 1);
   const {editorNumber} = editors[0];
+  const ownProjects = "(await (await fetch('/store.php')).json()).projects";
+  await waitFor(ownProjects + "?.length === 1", 'new project saved in the paired account');
+  const previousRevision = await evaluate(ownProjects + "[0].revision");
   const before = await call('layerling_read_scene', {editorNumber});
   await call('layerling_create_shape', {editorNumber, kind: 'box', width: 10, depth: 12, height: 8});
   const after = await call('layerling_read_scene', {editorNumber});
   assert.equal(after.shapeCount, before.shapeCount + 1);
+  await waitFor(ownProjects + '[0].revision !== ' + JSON.stringify(previousRevision),
+    'MCP shape persisted in the paired account');
+
   stage = 'MCP logout';
   await openFooter();
   await evaluate("setTimeout(() => document.querySelector('#sso-cad-nav button[type=submit]').click(), 0)");
