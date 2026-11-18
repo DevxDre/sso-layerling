@@ -2,7 +2,7 @@
 declare(strict_types=1);
 $e = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $label = static fn(string $id): string => is_string($labels[$id] ?? null) && $labels[$id] !== '' ? $labels[$id] : $id;
-$displayGroups = $access['groups'];
+$displayGroups = $access['publishGroups'];
 usort($displayGroups, static fn(string $a, string $b): int => strnatcasecmp($label($a), $label($b)) ?: strcmp($a, $b));
 $labelCounts = array_count_values(array_map($label, $displayGroups));
 ?>
@@ -33,7 +33,7 @@ $labelCounts = array_count_values(array_map($label, $displayGroups));
 </form>
 </section>
 <?php elseif ($access['teacher']): ?>
-<p>Für die Veröffentlichung ist mindestens eine Gruppe aus deiner Anmeldung erforderlich.</p>
+<p>Für deine Gruppen ist aktuell keine Veröffentlichung möglich.</p>
 <?php endif; ?>
 <section>
 <h2><?= $access['teacher'] ? 'Meine veröffentlichten Vorlagen' : 'Verfügbare Vorlagen' ?></h2>

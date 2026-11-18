@@ -2,6 +2,8 @@
 declare(strict_types=1);
 namespace Sso\Layerling\Oidc;
 
+use Sso\Layerling\StorageConfig;
+
 final class Config
 {
     public const ALGORITHMS = ['RS256'];
@@ -9,10 +11,12 @@ final class Config
     public const TRANSACTION_TTL = 300;
     public readonly string $redirectUri;
     public readonly Profile $profile;
-    public function __construct(public readonly string $clientId, private readonly string $secret, ?Profile $profile = null)
+    public function __construct(public readonly string $clientId, private readonly string $secret, ?Profile $profile = null,
+        public readonly ?string $adminRole = null)
     {
         if (!preg_match('/^[a-zA-Z0-9_-]{1,128}$/D', $clientId)
-            || !preg_match('/^[\x21-\x7e]{16,4096}$/D', $secret)) {
+            || !preg_match('/^[\x21-\x7e]{16,4096}$/D', $secret)
+            || ($adminRole !== null && !StorageConfig::roleId($adminRole))) {
             throw new LoginFailed(LoginFailed::CONFIG);
         }
         $this->profile = $profile ?? Profile::defaults();
@@ -36,7 +40,7 @@ final class Config
             if (!preg_match('/^(?:export\s+)?([A-Z_][A-Z0-9_]*)\s*=(.*)$/D', $line, $m)) {
                 throw new LoginFailed(LoginFailed::CONFIG);
             }
-            if (!in_array($m[1], ['SSO_LAYERLING_OIDC_CLIENT_ID', 'SSO_LAYERLING_OIDC_CLIENT_SECRET'], true)) { continue; }
+            if (!in_array($m[1], ['SSO_LAYERLING_OIDC_CLIENT_ID', 'SSO_LAYERLING_OIDC_CLIENT_SECRET', 'SSO_LAYERLING_ADMIN_ROLE'], true)) { continue; }
             if (array_key_exists($m[1], $values)) { throw new LoginFailed(LoginFailed::CONFIG); }
             $value = trim($m[2]);
             if (str_starts_with($value, '"') || str_starts_with($value, "'")) {
@@ -48,6 +52,8 @@ final class Config
             }
             $values[$m[1]] = $value;
         }
-        return new self($values['SSO_LAYERLING_OIDC_CLIENT_ID'] ?? '', $values['SSO_LAYERLING_OIDC_CLIENT_SECRET'] ?? '', $profile);
+        $adminRole = $values['SSO_LAYERLING_ADMIN_ROLE'] ?? '';
+        return new self($values['SSO_LAYERLING_OIDC_CLIENT_ID'] ?? '', $values['SSO_LAYERLING_OIDC_CLIENT_SECRET'] ?? '',
+            $profile, $adminRole === '' ? null : $adminRole);
     }
 }

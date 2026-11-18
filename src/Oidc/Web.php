@@ -75,12 +75,17 @@ final class Web
     }
     private function sameOriginPost(): void
     {
-        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST'
-            || ($_SERVER['HTTP_ORIGIN'] ?? '') !== $this->origin
-            || !in_array($_SERVER['HTTP_SEC_FETCH_SITE'] ?? 'same-origin', ['same-origin', 'none'], true)) {
+        if (!$this->isSameOriginPost()) {
             throw new LoginFailed(LoginFailed::TRANSACTION);
         }
     }
+    private function isSameOriginPost(): bool
+    {
+        return ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'
+            && ($_SERVER['HTTP_ORIGIN'] ?? '') === $this->origin
+            && in_array($_SERVER['HTTP_SEC_FETCH_SITE'] ?? 'same-origin', ['same-origin', 'none'], true);
+    }
+
     private function openSession(): ?array
     {
         $session = $this->native->open();
@@ -92,9 +97,6 @@ final class Web
         $diagnostic = $claims->diagnostic($this->config->profile->diagnosticGroupIds);
         if ($this->storage !== null) {
             $diagnostic['preferredUsername'] = $claims->preferredUsername;
-            if (SsoPolicy::canPublishTemplates($claims->roles, $this->storage->values)) {
-                $diagnostic['templateGroupLabels'] = $claims->groupLabels;
-            }
         }
         $this->native->issue($owner, $diagnostic);
     }
@@ -138,9 +140,11 @@ final class Web
         $csrf = $ctx->csrf();
         $session = $this->openSession();
         $templateAccess = $profile = null;
+        $canManagePermissions = false;
         if ($session !== null && $this->storage !== null) {
             $policy = new SsoPolicy($this->private, $this->storage->values);
             $templateAccess = $policy->templateAccess($session['userId']);
+            $canManagePermissions = $policy->isPermissionsAdmin($session['userId'], $this->config->adminRole);
             if ($account) { $profile = $policy->owner($session['userId'], $session['userId']); }
         }
         if (session_status() === PHP_SESSION_ACTIVE) { session_write_close(); }
@@ -190,6 +194,7 @@ final class Web
             if ($this->storage === null) { echo '<p>Diese Angaben schalten keine Fremddateirechte frei.</p>'; }
         }
         if ($account) { echo '<p><a href="/cad.php">Zum CAD-Editor</a></p>'; }
+        if ($canManagePermissions) { echo '<p><a href="/rechte.php">Rechte verwalten</a></p>'; }
         if ($templateAccess && ($templateAccess['teacher'] || $templateAccess['student'])) {
             echo '<p><a href="/vorlagen.php">CAD-Vorlagen</a></p>';
         }
@@ -198,6 +203,53 @@ final class Web
         echo '</main></html>';
         exit;
     }
+    public function permissions(): never
+    {
+        $this->route(['/rechte.php']);
+        if ($this->storage === null) { http_response_code(404); exit; }
+        $method = $_SERVER['REQUEST_METHOD'] ?? '';
+        if (!in_array($method, ['GET', 'POST'], true)) {
+            header('Allow: GET, POST', true, 405);
+            exit;
+        }
+        header('Content-Type: text/html; charset=utf-8');
+        $session = $this->openSession();
+        if ($session === null || $this->config->adminRole === null) {
+            $this->denyPermissions($session === null ? 401 : 403);
+        }
+        $csrf = $session['csrf'];
+        $changing = $method === 'POST';
+        $submittedCsrf = $_POST['csrf'] ?? null;
+        if ($changing && (!$this->isSameOriginPost() || !is_string($submittedCsrf) || !hash_equals($csrf, $submittedCsrf))) {
+            $this->denyPermissions(403);
+        }
+        $policy = new SsoPolicy($this->private, $this->storage->values, $changing);
+        if (!$policy->isPermissionsAdmin($session['userId'], $this->config->adminRole)) {
+            $this->denyPermissions(403);
+        }
+        if ($changing && $policy->changePermissions($_POST)) {
+            $this->redirect('/rechte.php?saved=1');
+        }
+        $invalid = $changing;
+        if ($invalid) { http_response_code(400); }
+        [$rules, $patterns, $selectors] = $policy->permissionSettings();
+        unset($policy);
+        session_write_close();
+        header('Referrer-Policy: same-origin');
+        header("Content-Security-Policy: default-src 'none'; style-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
+        require __DIR__ . '/permissions-page.php';
+        exit;
+    }
+
+    private function denyPermissions(int $status): never
+    {
+        http_response_code($status);
+        echo '<!doctype html><html lang="de"><meta charset="utf-8"><title>Rechte verwalten</title>'
+            . '<h1>Zugriff verweigert</h1><p>Die Rechteseite erfordert ein angemeldetes Administratorkonto.</p>'
+            . '<a href="/index.php">Zur Anmeldung</a></html>';
+        exit;
+    }
+
     public function files(): never
     {
         $this->route(['/files.php', '/files', '/files/', '/files/index.php']);
@@ -233,6 +285,7 @@ final class Web
         $templateAccess = $policy->templateAccess($actor);
         $mcpRules = \Sso\Layerling\McpTest::rules($this->private, $this->storage);
         $mcpTest = $selected['isSelf'] && $mcpRules !== null && $policy->allowsMcpTest($actor, $mcpRules);
+        $canManagePermissions = $policy->isPermissionsAdmin($actor, $this->config->adminRole);
         unset($policy);
         session_write_close();
         $ctx = $this->context(true);
@@ -250,7 +303,7 @@ final class Web
         $context = json_encode(['userId'=>$actor, 'csrfToken'=>$session['csrf'], 'logoutCsrf'=>$logoutCsrf,
             'selected'=>$selected, 'owners'=>$owners, 'mcpTest'=>$mcpTest,
             'mcpHosted'=>$mcpTest && $this->storage->secure,
-            'canUseTemplates'=>$templateAccess['teacher'] || $templateAccess['student']],
+            'canManagePermissions'=>$canManagePermissions, 'canUseTemplates'=>$templateAccess['teacher'] || $templateAccess['student']],
             JSON_THROW_ON_ERROR|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT);
         $head = '<link rel="stylesheet" href="/cad-bridge.css">'
             .'<script nonce="'.$nonce.'" id="sso-cad-context" type="application/json">'.$context.'</script>'

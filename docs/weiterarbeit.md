@@ -33,6 +33,11 @@ Bestehende Eigentümerbindungen, Projekte und Vorlagen bei Umstellungen erhalten
 Die [Migrationsbeschreibung](installation-und-migration.md) erläutert die Grenzen der
 Umbenennung und der neuen Cookie-/Browser-Speichernamensräume.
 
+Die Rechteseite unter `/rechte.php` verwaltet Regeln über die in der privaten `.env`
+gesetzte OIDC-Admin-Rolle. Sie ist über das SSO-Menü und die Kontoseite erreichbar.
+Der [Rechteleitfaden](sso-berechtigungsmodell.md#rechte-über-die-oberfläche-verwalten)
+beschreibt die Priorität der Regeln, Vorlagengruppen und MCP-Freigaben.
+
 ## Prüfstand und offene Punkte
 
 Der übernommene Quellstand wurde mit OIDC-, Speicher-, Paketierungs- und Installerprüfungen

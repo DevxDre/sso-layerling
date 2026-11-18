@@ -23,6 +23,7 @@
   const mcpEditorId = context.mcpTest === true && owner === actor ? crypto.randomUUID() : null;
   const mcpEditorNumber = mcpEditorId === null ? null : 10000 + crypto.getRandomValues(new Uint32Array(1))[0] % 90000;
   if (mcpEditorId !== null) root.dataset.ssoMcpTest = 'true';
+  let canWrite = selected.canWrite === true;
   let canDelete = selected.canDelete === true;
   root.dataset.ssoCanDelete = String(canDelete);
   const csrf = context.csrfToken;
@@ -149,6 +150,12 @@
       document.querySelector('[data-sso-design-search]')?.focus();
     });
     actions.append(searchDesign);
+    if (context.canManagePermissions) {
+      const permissions = document.createElement('a');
+      permissions.href = '/rechte.php';
+      permissions.textContent = 'Rechte verwalten';
+      actions.append(permissions);
+    }
     if (context.canUseTemplates) {
       const templates = document.createElement('a');
       templates.href = '/vorlagen.php';
@@ -302,8 +309,9 @@
         if (!response.ok) throw new Error('Session rejected');
         const value = await response.json();
         if (value.userId !== actor || value.ownerId !== owner || value.csrfToken !== csrf
-            || typeof value.canDelete !== 'boolean' || !Number.isInteger(value.expiresAt)
+            || typeof value.canWrite !== 'boolean' || typeof value.canDelete !== 'boolean' || !Number.isInteger(value.expiresAt)
             || value.expiresAt <= Date.now() / 1000) throw new Error('Session changed');
+        canWrite = value.canWrite;
         canDelete = value.canDelete;
         root.dataset.ssoCanDelete = String(canDelete);
         assertOpen();
@@ -356,6 +364,9 @@
       return request.method === 'GET'
         ? Response.json({enabled: false})
         : Response.json({error: 'Persönliche Einstellungen sind in diesem Dateibereich gesperrt.'}, {status: 403});
+    }
+    if (request.method === 'POST' && !canWrite) {
+      return Response.json({error: 'In diesem Dateibereich darfst du keine Dateien bearbeiten.'}, {status: 403});
     }
     if (request.method === 'DELETE' && !canDelete) {
       return Response.json({error: 'In diesem Dateibereich darfst du keine Dateien löschen.'}, {status: 403});

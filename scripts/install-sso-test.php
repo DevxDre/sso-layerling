@@ -55,6 +55,11 @@ function templateFiles(string $app): array
     return is_file($app.'/src/TemplateCatalog.php') ? ['vorlagen.php', 'vorlagen.js'] : [];
 }
 
+function permissionsFiles(string $app): array
+{
+    return is_file($app.'/src/PermissionRules.php') ? ['rechte.php'] : [];
+}
+
 const CAD_ENTRY_FILES = ['konto/index.php', 'files/index.php'];
 const CAD_MCP_FILE = 'mcp.php';
 
@@ -71,7 +76,7 @@ function cadFiles(string $app, array $files, array $baseFiles): void
         && $bundle['indexSha256'] === ($build['files']['index.html'] ?? null)
         && $bundle['indexSha256'] === hash_file('sha256', $app.'/cad/index.html')
         && ($build['files']['store.php'] ?? null) === ($pin['sha256'] ?? null), 'CAD build integrity mismatch');
-    $controllers = [...$baseFiles, ...templateFiles($app), 'cad.php', 'cad-session.php', 'cad-bridge.js', 'cad-bridge.css'];
+    $controllers = [...$baseFiles, ...templateFiles($app), ...permissionsFiles($app), 'cad.php', 'cad-session.php', 'cad-bridge.js', 'cad-bridge.css'];
     if (($bundle['entryRoutes'] ?? null) === 'cad-first-v1') {
         array_push($controllers, ...CAD_ENTRY_FILES);
     }
@@ -166,6 +171,7 @@ try {
     $storageTest = $manifest['kind'] !== 'sso-layerling-sso-test';
     $managedFiles = [...$publicFiles, 'files.php', 'files.js', 'files.css', 'store.php', 'session.php', 'owners.php'];
     $templateFiles = $storageTest ? templateFiles($package.'/private/app') : [];
+    $permissionsFiles = $storageTest ? permissionsFiles($package.'/private/app') : [];
     $packagePublic = [];
     foreach ($actual as $path => $hash) {
         if (str_starts_with($path, 'public/')) {
@@ -176,12 +182,12 @@ try {
     if ($cadTest) {
         cadFiles($package.'/private/app', $packagePublic, $managedFiles);
         $publicFiles = array_keys($packagePublic);
-        $controllers = [...$managedFiles, ...$templateFiles, ...CAD_ENTRY_FILES, CAD_MCP_FILE, 'cad.php', 'cad-session.php', 'cad-bridge.js', 'cad-bridge.css'];
+        $controllers = [...$managedFiles, ...$templateFiles, ...$permissionsFiles, ...CAD_ENTRY_FILES, CAD_MCP_FILE, 'cad.php', 'cad-session.php', 'cad-bridge.js', 'cad-bridge.css'];
         $staticFiles = array_diff($publicFiles, $controllers);
         $publicFiles = [...array_diff($publicFiles, $staticFiles, ['cad.php', 'index.php']), 'cad.php', 'index.php'];
     } else {
         if ($storageTest) {
-            $publicFiles = [...$managedFiles, ...$templateFiles];
+            $publicFiles = [...$managedFiles, ...$templateFiles, ...$permissionsFiles];
         }
         $expectedPublic = array_keys($packagePublic);
         sort($expectedPublic);
@@ -203,7 +209,7 @@ try {
         cadFiles($app, $existing, $managedFiles);
         demand($existing === ($previous['publicFiles'] ?? null), 'Installed CAD files changed');
     } else {
-        demand(array_diff(array_keys($existing), [...$managedFiles, ...templateFiles($app)]) === [], 'Existing website files refused; inspect the webroot first');
+        demand(array_diff(array_keys($existing), [...$managedFiles, ...templateFiles($app), ...permissionsFiles($app)]) === [], 'Existing website files refused; inspect the webroot first');
     }
     demand($existing === [] || isset($existing['.sso-layerling-sso-test']), 'Unmanaged website refused');
     require $package.'/private/app/vendor/autoload.php';

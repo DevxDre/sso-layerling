@@ -34,7 +34,7 @@ class CadHTTPTest(base.IntegratedStorageTest):
         if OPTIONS.candidate:
             shutil.copytree(OPTIONS.candidate/'private/app/cad',cls.cad,dirs_exist_ok=True)
             for p in (OPTIONS.candidate/'public').iterdir():
-                if p.name in ['index.php','_sso.php','auth','store.php','session.php','owners.php','files.php','files','konto','files.js','files.css','vorlagen.php','vorlagen.js','.sso-layerling-sso-test','cad-session.php']:continue
+                if p.name in ['index.php','_sso.php','auth','store.php','session.php','owners.php','files.php','files','konto','files.js','files.css','vorlagen.php','vorlagen.js','rechte.php','.sso-layerling-sso-test','cad-session.php']:continue
                 if p.is_dir():shutil.copytree(p,cls.runtime/'public'/p.name,dirs_exist_ok=True)
                 else:shutil.copyfile(p,cls.runtime/'public'/p.name)
         else:
