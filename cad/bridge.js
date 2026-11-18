@@ -159,12 +159,13 @@
       const pair = document.createElement('button');
       pair.type = 'button';
       pair.id = 'sso-mcp-pair';
-      pair.textContent = 'MCP-Testtoken erstellen';
+      const tokenLabel = context.mcpHosted === true ? 'MCP-Token' : 'MCP-Testtoken';
+      pair.textContent = tokenLabel + ' erstellen';
       const token = document.createElement('input');
       token.readOnly = true;
       token.hidden = true;
       token.autocomplete = 'off';
-      token.setAttribute('aria-label', 'MCP-Testtoken');
+      token.setAttribute('aria-label', tokenLabel);
       const status = document.createElement('span');
       status.setAttribute('role', 'status');
       clearMcpToken = () => { token.value = ''; token.hidden = true; status.textContent = ''; };
@@ -178,12 +179,13 @@
           if (!response.ok) throw new Error('MCP pairing rejected');
           const result = await response.json();
           if (!menu.open || locked) return;
-          status.textContent = 'Für diese Sitzung. Gültig bis ' + new Date(result.expiresAt * 1000).toLocaleTimeString('de-DE');
+          status.textContent = (context.mcpHosted === true ? 'Bis zum Sitzungsende. Spätestens ' : 'Für diese Sitzung. Gültig bis ')
+            + new Date(result.expiresAt * 1000).toLocaleTimeString('de-DE', {hour: '2-digit', minute: '2-digit'});
           token.value = result.token;
           token.hidden = false;
           token.select();
         } catch {
-          if (menu.open) status.textContent = 'MCP-Testtoken konnte nicht erstellt werden.';
+          if (menu.open) status.textContent = tokenLabel + ' konnte nicht erstellt werden.';
         } finally {
           pair.disabled = false;
         }
@@ -338,6 +340,7 @@
         if (payload.type === 'poll' || payload.type === 'result') payload.editorId = mcpEditorId;
         body = JSON.stringify(payload);
       }
+      if (context.mcpHosted === true) url.pathname = '/mcp.php';
       return nativeFetch(url, {method: request.method, headers, body, signal: request.signal,
         credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error'});
     }

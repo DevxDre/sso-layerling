@@ -249,11 +249,12 @@ final class Web
         $html = preg_replace('/<script\b/', '<script nonce="'.$nonce.'"', $html);
         $context = json_encode(['userId'=>$actor, 'csrfToken'=>$session['csrf'], 'logoutCsrf'=>$logoutCsrf,
             'selected'=>$selected, 'owners'=>$owners, 'mcpTest'=>$mcpTest,
+            'mcpHosted'=>$mcpTest && $this->storage->secure,
             'canUseTemplates'=>$templateAccess['teacher'] || $templateAccess['student']],
             JSON_THROW_ON_ERROR|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT);
         $head = '<link rel="stylesheet" href="/cad-bridge.css">'
             .'<script nonce="'.$nonce.'" id="sso-cad-context" type="application/json">'.$context.'</script>'
-            .'<script nonce="'.$nonce.'" src="/cad-bridge.js"></script>';
+            .'<script nonce="'.$nonce.'" src="/cad-bridge.js'.($mcpTest && $this->storage->secure ? '?v=mcp-2' : '').'"></script>';
         if (substr_count($html,'<head>')!==1) { throw new LoginFailed(LoginFailed::CONFIG); }
         $html = str_replace('<head>','<head>'.$head,$html);
         header('Referrer-Policy: same-origin');

@@ -5,6 +5,7 @@ import json
 import os
 import re
 from pathlib import Path
+from tempfile import TemporaryDirectory
 import shutil
 import subprocess
 import time
@@ -115,10 +116,14 @@ class CadHTTPTest(base.IntegratedStorageTest):
     def test_mcp_browser_and_stdio(self):
         account = self.login()
         self.mcp_rules(accounts=[account.owner])
-        payload = {'origin': self.origin, 'cookies': account.cookies,
-                   'mcp': str(OPTIONS.layerling.resolve()/'scripts/layerling-mcp-server.mjs')}
-        result = subprocess.run(['node', str(ROOT/'tests/cad_browser_test.mjs')], input=json.dumps(payload), text=True,
-                                capture_output=True, timeout=105)
+        with TemporaryDirectory(prefix='sso-cad-mcp-browser-') as temp:
+            client = subprocess.check_output(
+                ['python3', str(ROOT/'scripts/prepare-mcp-client.py'),
+                 '--layerling', str(OPTIONS.layerling.resolve()), '--output', str(Path(temp)/'client')],
+                text=True).strip()
+            payload = {'origin': self.origin, 'cookies': account.cookies, 'mcp': client}
+            result = subprocess.run(['node', str(ROOT/'tests/cad_browser_test.mjs')], input=json.dumps(payload), text=True,
+                                    capture_output=True, timeout=105)
         self.assertEqual(result.returncode, 0, (result.stdout + result.stderr)[-3000:])
         self.assertIn('CAD_MCP_BROWSER_OK', result.stdout)
     def test_15_cad_entry_requires_native_login_and_actor(self):

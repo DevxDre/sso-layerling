@@ -56,6 +56,7 @@ function templateFiles(string $app): array
 }
 
 const CAD_ENTRY_FILES = ['konto/index.php', 'files/index.php'];
+const CAD_MCP_FILE = 'mcp.php';
 
 /** Accept only the fixed controllers and the static export described by the private build report. */
 function cadFiles(string $app, array $files, array $baseFiles): void
@@ -73,6 +74,9 @@ function cadFiles(string $app, array $files, array $baseFiles): void
     $controllers = [...$baseFiles, ...templateFiles($app), 'cad.php', 'cad-session.php', 'cad-bridge.js', 'cad-bridge.css'];
     if (($bundle['entryRoutes'] ?? null) === 'cad-first-v1') {
         array_push($controllers, ...CAD_ENTRY_FILES);
+    }
+    if (($bundle['hostedMcp'] ?? false) === true) {
+        $controllers[] = CAD_MCP_FILE;
     }
     $excluded = ['index.html', 'index.txt', 'store.php', 'sw.js', 'manifest.webmanifest', 'support.html',
         'view.html', '404.html', 'robots.txt', 'sitemap.xml'];
@@ -172,7 +176,7 @@ try {
     if ($cadTest) {
         cadFiles($package.'/private/app', $packagePublic, $managedFiles);
         $publicFiles = array_keys($packagePublic);
-        $controllers = [...$managedFiles, ...$templateFiles, ...CAD_ENTRY_FILES, 'cad.php', 'cad-session.php', 'cad-bridge.js', 'cad-bridge.css'];
+        $controllers = [...$managedFiles, ...$templateFiles, ...CAD_ENTRY_FILES, CAD_MCP_FILE, 'cad.php', 'cad-session.php', 'cad-bridge.js', 'cad-bridge.css'];
         $staticFiles = array_diff($publicFiles, $controllers);
         $publicFiles = [...array_diff($publicFiles, $staticFiles, ['cad.php', 'index.php']), 'cad.php', 'index.php'];
     } else {

@@ -1,0 +1,80 @@
+--- a/scripts/layerling-mcp-server.mjs
++++ b/scripts/layerling-mcp-server.mjs
+@@ -6,15 +6,14 @@
+ import { isLocalBridgeUrl, openEditorAndWait } from "./layerling-mcp-open.mjs";
+ import { createNotesSeen, notesWaitMs, waitForNotes } from "./layerling-mcp-notes-wait.mjs";
+
+-const DEFAULT_BASE_URL = "http://127.0.0.1:3000";
+-const MCP_ROUTE = "/api/layerling-mcp";
+-const baseUrl = process.env.LAYERLING_URL || DEFAULT_BASE_URL;
+-// A copy on a NAS or home server that switched remote use on (LAYERLING_MCP_REMOTE and
+-// LAYERLING_MCP_TOKEN there) wants the same token from this client.
++const baseUrl = new URL(process.env.LAYERLING_URL || "http://127.0.0.1:3000");
++if (baseUrl.username || baseUrl.password || (baseUrl.protocol !== "https:" &&
++    (baseUrl.protocol !== "http:" || !isLocalBridgeUrl(baseUrl)))) {
++  throw new Error("Set LAYERLING_URL to an HTTPS address or the local test server.");
++}
++const MCP_ROUTE = baseUrl.protocol === "https:" ? "/mcp.php" : "/api/layerling-mcp";
+ const accessToken = (process.env.LAYERLING_MCP_TOKEN || "").trim();
+-// With no editor open, a tool that needs one starts the browser itself - on this computer only.
+-// LAYERLING_MCP_OPEN_EDITOR=0 leaves that to the user.
+-const openEditorAutomatically = process.env.LAYERLING_MCP_OPEN_EDITOR !== "0" && isLocalBridgeUrl(baseUrl);
++const openEditorAutomatically = process.env.LAYERLING_MCP_OPEN_EDITOR === "1" && isLocalBridgeUrl(baseUrl);
+
+ function bridgeUrl() {
+   return new URL(MCP_ROUTE, baseUrl);
+@@ -24,18 +23,17 @@
+  * fetch() against a dev server that is not running only says "fetch failed".
+  * Name what is missing instead, and never wait forever on a server that hangs.
+  */
+-async function bridgeFetch(options, timeoutMs) {
++async function bridgeFetch(options, timeoutMs, commandId) {
+   try {
+     const headers = { ...(options.headers || {}), ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) };
+-    return await fetch(bridgeUrl(), { ...options, headers, signal: AbortSignal.timeout(timeoutMs) });
++    const url = bridgeUrl();
++    if (commandId) url.searchParams.set("command", commandId);
++    return await fetch(url, { ...options, headers, redirect: "error", signal: AbortSignal.timeout(timeoutMs) });
+   } catch (error) {
+     if (error?.name === "TimeoutError") {
+       throw new Error(`Layerling at ${baseUrl} did not answer within ${Math.round(timeoutMs / 1000)} s.`);
+     }
+-    throw new Error(
+-      `Cannot reach Layerling at ${baseUrl}. Start it with "npm run dev" and open an editor tab` +
+-        ` (set LAYERLING_URL if it runs elsewhere; a copy on a NAS also needs LAYERLING_MCP_REMOTE and LAYERLING_MCP_TOKEN on the server).`,
+-    );
++    throw new Error(`Cannot reach the SSO Layerling MCP endpoint at ${bridgeUrl().origin}. Check LAYERLING_URL and the deployment's MCP configuration.`);
+   }
+ }
+
+@@ -66,7 +64,8 @@
+   }
+
+   const commandTimeoutMs = typeof timeoutMs === "number" ? timeoutMs : defaultTimeoutMs;
+-  const response = await bridgeFetch({
++  const deadline = Date.now() + commandTimeoutMs + 10000;
++  let response = await bridgeFetch({
+     method: "POST",
+     headers: { "Content-Type": "application/json" },
+     body: JSON.stringify({
+@@ -78,7 +77,19 @@
+       timeoutMs: commandTimeoutMs,
+     }),
+   }, commandTimeoutMs + 10000);
+-  const payload = await response.json().catch(() => null);
++  let payload = await response.json().catch(() => null);
++  if (response.status === 202) {
++    const commandId = payload?.commandId;
++    if (typeof commandId !== "string" || !/^[a-f0-9]{32}$/.test(commandId)) {
++      throw new Error("Layerling returned an invalid command ID.");
++    }
++    while (response.status === 202 && Date.now() < deadline) {
++      await new Promise(resolve => setTimeout(resolve, 500));
++      response = await bridgeFetch({}, Math.max(1, deadline - Date.now()), commandId);
++      payload = await response.json().catch(() => null);
++    }
++    if (response.status === 202) throw new Error("Layerling did not finish the command in time.");
++  }
+   if (!payload?.ok) {
+     throw new Error(payload?.error || `Layerling command failed with HTTP ${response.status}`);
+   }
