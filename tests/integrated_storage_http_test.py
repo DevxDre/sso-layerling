@@ -143,7 +143,7 @@ class IntegratedStorageTest(unittest.TestCase):
 
     def test_permissions_page_access_and_file_rules(self):
         path = '/rechte.php'
-        learner = self.login(groups=['lab'], group_acts={'lab': 'makerspace-lab'})
+        learner = self.login(groups=['lab', 'legacy-only'], group_acts={'lab': 'makerspace-lab'})
         legacy_admin = self.login(U2, ['ROLE_ADMIN'], [ADMIN])
         operator = self.login(UA, [self.rights_admin_role])
         tutor = self.login(UM, ['ROLE_TEACHER'], ['tutoring'], group_acts={'tutoring': 'mentors'})
@@ -153,6 +153,7 @@ class IntegratedStorageTest(unittest.TestCase):
         options = self.raw(operator, path=path)[2]
         self.assertIn(b'value="groups:makerspace-lab"', options)
         self.assertNotIn(b'value="group:lab"', options)
+        self.assertNotIn(b'value="group:legacy-only"', options)
         self.assertIn(b'value="groups:mentors"', options)
         group_names_version = re.search(rb'name="groupNamesVersion" value="([a-f0-9]{64})"', options)[1].decode()
         self.assertIn(b'value="role:' + self.provider_role('ROLE_TEACHER').encode() + b'"', options)
@@ -189,12 +190,13 @@ class IntegratedStorageTest(unittest.TestCase):
         self.change_rule(operator, 'read', 'group:tutoring', owner=subject_role, effect='deny')
         self.json(self.raw(tutor, path=new_file), 403)
         self.assertNotIn(learner.owner, [entry['userId'] for entry in self.json(self.raw(tutor, path='/owners.php'))['owners']])
-        self.change_rule(operator, 'write', teacher_role, owner='group:lab', effect='deny')
+        self.change_rule(operator, 'write', teacher_role, owner='group:legacy-only', effect='deny')
         self.json(self.upload(tutor, 'denied', learner.owner, name='denied.lyl'), 403)
 
         saved_page = operator.request(path)[2]
         self.assertIn(b'<td>groups:makerspace-lab</td>', saved_page)
         self.assertIn(b'<td>groups:mentors</td>', saved_page)
+        self.assertIn(b'<td>group:legacy-only</td>', saved_page)
         keys = re.findall(rb'name="key" value="([a-f0-9]{64})"', saved_page)
         self.assertEqual(len(keys), 5)
         self.assertEqual(operator.request(path, 'POST', {

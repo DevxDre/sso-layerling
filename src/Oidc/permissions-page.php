@@ -60,7 +60,7 @@ $back = $this->hasCad() ? '/konto/' : '/';
   <button>Regel speichern</button>
 </form>
 </section>
-<p>Wähle einen Gruppenaccount (<code>groups:</code>) oder eine Rolle (<code>role:</code>). Für Gruppen ohne eindeutigen Account kannst du die Gruppen-ID mit <code>group:</code> eingeben.</p>
+<p>Die Vorschläge zeigen eindeutige Gruppenaccounts (<code>groups:</code>) und Rollen (<code>role:</code>). Eine Gruppen-ID kannst du direkt mit <code>group:</code> eingeben.</p>
 <datalist id="selectors">
   <?php foreach ($selectors as $selector => $label): ?>
     <option value="<?= $escape($selector) ?>"><?= $escape($label) ?></option>

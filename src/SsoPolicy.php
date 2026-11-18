@@ -104,8 +104,8 @@ final class SsoPolicy
             $account = $group['account'];
             if ($account !== '' && $accountCounts[$account] === 1) {
                 $groupNames[$selector] = 'groups:' . $account;
+                $selectors[$groupNames[$selector]] = $group['label'];
             }
-            $selectors[$groupNames[$selector] ?? $selector] = $group['label'];
         }
         ksort($selectors, SORT_NATURAL);
         ksort($groupNames, SORT_STRING);
