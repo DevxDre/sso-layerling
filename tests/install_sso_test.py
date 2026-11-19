@@ -29,6 +29,8 @@ class InstallTest(unittest.TestCase):
         script="$_SERVER=['HTTP_HOST'=>'cad.example.invalid','HTTPS'=>'on','DOCUMENT_ROOT'=>$argv[1],'REQUEST_URI'=>'/','REQUEST_METHOD'=>'GET']; require $argv[1].'/index.php';"
         response=subprocess.run([OPTIONS.php,'-r',script,str(self.public)],capture_output=True,text=True)
         self.assertEqual(response.returncode,0,response.stderr);self.assertIn('Mit IServ anmelden',response.stdout)
+        self.assertIn('href="/files.css"', response.stdout)
+        self.assertEqual((self.public/'files.css').read_bytes(), (self.artifact/'public/files.css').read_bytes())
         self.assertNotIn('synthetic-secret',response.stdout+response.stderr)
     def test_02_checksum_mismatch_refused_before_activation(self):
         (self.artifact/'public/index.php').write_text('TAMPERED')

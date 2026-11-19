@@ -191,9 +191,9 @@ class CadHTTPTest(base.IntegratedStorageTest):
         maker = self.login(base.UM, ['ROLE_TEACHER'], [base.MAKER])
         account = student.request('/konto/')
         self.assertEqual(account[0], 200)
-        for value in ['Account: schueler&lt;&amp;', 'Name: Test &lt;Schüler&gt;', 'Klasse: 5a, 6b']:
-            self.assertIn(value.encode(), account[2])
-        self.assertIn('Klasse: –'.encode(), other.request('/konto/')[2])
+        for label, value in [('Account', 'schueler&lt;&amp;'), ('Name', 'Test &lt;Schüler&gt;'), ('Klasse', '5a, 6b')]:
+            self.assertRegex(account[2].decode(), rf'<dt>{label}</dt>\s*<dd class="sso-wrap">{re.escape(value)}</dd>')
+        self.assertRegex(other.request('/konto/')[2].decode(), r'<dt>Klasse</dt>\s*<dd class="sso-wrap">–</dd>')
         self.seed_permissions(*self.ownership_rules(base.MAKER))
         owners = self.json(self.raw(maker, path='/owners.php?cad=1'))['owners']
         entry = next(item for item in owners if item['userId'] == student.owner)
@@ -202,7 +202,7 @@ class CadHTTPTest(base.IntegratedStorageTest):
         self.assertEqual(len(self.json(self.raw(other, path='/owners.php?cad=1'))['owners']), 1)
         # Existing records and a later login without a class both render without errors.
         self.login(groups=[])
-        self.assertIn('Klasse: –'.encode(), student.request('/konto/')[2])
+        self.assertRegex(student.request('/konto/')[2].decode(), r'<dt>Klasse</dt>\s*<dd class="sso-wrap">–</dd>')
 
     def test_recent_activity_counts_successful_project_saves_for_the_actor(self):
         student = self.login()
@@ -284,7 +284,10 @@ class CadHTTPTest(base.IntegratedStorageTest):
                            group_acts={'other-class': self.class_prefix+'6b'}, display_name=None)
         teacher=self.login('66666666-6666-6666-6666-666666666666', ['ROLE_TEACHER'], ['cad-class'], display_name='Änne Lehrkraft')
         maker = self.login(base.UM, ['ROLE_TEACHER'], [base.MAKER])
-        admin = self.login(base.UA, ['ROLE_TEACHER'], [base.ADMIN])
+        account_name = 'KonstruktionswerkstattSchuljahresabschlussprojekt' * 3
+        account_id = 'arbeitsgruppenbenutzerkennung' * 5
+        admin = self.login(base.UA, ['ROLE_TEACHER', self.rights_admin_role], [base.ADMIN],
+                           display_name=account_name, preferred_username=account_id)
         self.seed_permissions(*self.ownership_rules(base.MAKER, base.ADMIN), self.publisher_rule())
         (self.private/'projects'/a.owner/Path(*['depth']*13)).mkdir(parents=True)
         [occt_index] = (OPTIONS.candidate/'public/occt').glob('*/index.js')
@@ -292,7 +295,7 @@ class CadHTTPTest(base.IntegratedStorageTest):
             'occtIndex': '/' + occt_index.relative_to(OPTIONS.candidate/'public').as_posix(),
             'owner':a.owner, 'otherOwner':b.owner, 'unnamedOwner':unnamed.owner, 'teacherOwner':teacher.owner,
             'makerCookies':maker.cookies, 'teacherCookies':teacher.cookies,
-            'makerOwner':maker.owner, 'adminCookies':admin.cookies}
+            'makerOwner':maker.owner, 'adminCookies':admin.cookies, 'accountName':account_name, 'accountId':account_id}
         result=subprocess.run(['node',str(ROOT/'tests/cad_browser_test.mjs')],input=json.dumps(payload),text=True,capture_output=True,timeout=210)
         self.assertEqual(result.returncode,0,(result.stdout+result.stderr)[-3000:])
         self.assertIn('CAD_BROWSER_OK',result.stdout)

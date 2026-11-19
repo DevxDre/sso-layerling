@@ -112,7 +112,7 @@ final class SsoPolicy
         return [$this->permissions->rules(), $this->permissions->patterns(), $selectors, $groupNames];
     }
 
-    public function changePermissions(array $form, array $groupNames): bool
+    public function changePermissions(array $form, array $groupNames): ?string
     {
         if (!$this->editPermissions) {
             throw new \LogicException('Permission update requires exclusive lock');
@@ -122,9 +122,12 @@ final class SsoPolicy
             foreach (['actor', 'owner'] as $field) {
                 $value = $form[$field] ?? null;
                 if (is_string($value) && str_starts_with($value, 'groups:')) {
+                    if ($submittedVersion !== self::groupNamesVersion($groupNames)) {
+                        return 'group-names';
+                    }
                     $selector = array_search($value, $groupNames, true);
-                    if ($selector === false || $submittedVersion !== self::groupNamesVersion($groupNames)) {
-                        return false;
+                    if ($selector === false) {
+                        return $field;
                     }
                     $form[$field] = $selector;
                 }

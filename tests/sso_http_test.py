@@ -126,6 +126,11 @@ class SsoHTTPTest(unittest.TestCase):
         self.assertEqual(r[1]['cache-control'],'private, no-store')
         self.assertEqual(r[1]['referrer-policy'],'same-origin')
         self.assertIn("frame-ancestors 'none'",r[1]['content-security-policy'])
+        self.assertIn("style-src 'self'",r[1]['content-security-policy'])
+        self.assertIn(b'href="/files.css"', r[2])
+        style = self.client.request('/files.css')
+        self.assertEqual(style[0], 200)
+        self.assertTrue(style[1]['content-type'].startswith('text/css'))
         self.assertIn('HttpOnly',r[1]['set-cookie']);self.assertIn('SameSite=Lax',r[1]['set-cookie'])
         self.assertNotIn('SSO_LAYERLING_SSO_TEST',self.client.cookies)
     def test_03_start_rejects_csrf_origin_and_get(self):

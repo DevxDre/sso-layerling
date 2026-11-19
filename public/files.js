@@ -6,6 +6,8 @@
   const upload = document.getElementById("upload");
   const folder = document.getElementById("folder");
   const up = document.getElementById("up");
+  const folderHeading = document.getElementById("folder-heading");
+  const pathLabel = document.getElementById("path");
   let csrf = "", path = "", owners = [], projects = [], serial = 0;
   const message = text => { status.textContent = text; };
   function url(query = {}, selected = owner.value, location = path) {
@@ -39,16 +41,36 @@
     event.preventDefault();
     try { await fn(); } catch (error) { message(error instanceof TypeError ? "Verbindung unterbrochen. Bitte erneut versuchen." : error.message); }
   };
-  function button(label, fn) {
+  function button(label, fn, modifier = "") {
     const element = document.createElement("button");
     element.textContent = label; element.type = "button";
+    element.className = "sso-button";
+    if (modifier) element.classList.add(modifier);
     element.addEventListener("click", action(fn)); return element;
   }
-  function row(name, actions) {
-    const tr = document.createElement("tr"), title = document.createElement("td"), controls = document.createElement("td");
-    title.textContent = name; controls.append(...actions); tr.append(title, controls); entries.append(tr);
+  function addEntry(name, actions) {
+    const entry = document.createElement("li");
+    entry.className = "sso-card sso-file-entry";
+    const title = document.createElement("span");
+    title.className = "sso-file-name sso-wrap";
+    title.textContent = name;
+    const controls = document.createElement("div");
+    controls.className = "sso-actions";
+    for (const control of actions) {
+      control.setAttribute("aria-label", control.textContent + " – " + name);
+      controls.append(control);
+    }
+    entry.append(title, controls);
+    entries.append(entry);
   }
-  async function load() {
+  function renderPath(location) {
+    pathLabel.replaceChildren("/");
+    for (const [index, segment] of location.split("/").entries()) {
+      if (index > 0) pathLabel.append("/", document.createElement("wbr"));
+      pathLabel.append(segment);
+    }
+  }
+  async function load(focusFolder = false) {
     const turn = ++serial;
     message("Dateien werden geladen …");
     entries.replaceChildren(); owner.disabled = true; up.disabled = true;
@@ -71,21 +93,22 @@
     if (turn !== serial || owner.value !== selected || path !== location) return;
     owner.disabled = false;
     projects = list.projects; entries.replaceChildren();
-    document.getElementById("path").textContent = "/" + path; up.disabled = path === "";
+    renderPath(location); up.disabled = location === "";
     upload.querySelector("button").disabled = !current.canWrite;
     folder.querySelector("button").disabled = !current.canWrite;
     for (const item of list.folders) {
       const next = location ? location + "/" + item.name : item.name;
-      const controls = [button("Öffnen", async () => { path = next; await load(); })];
+      const controls = [button("Öffnen", async () => { path = next; await load(true); })];
       if (current.canDelete) controls.push(button("Löschen", async () => {
         if (window.confirm("Ordner „" + item.name + "“ mit Inhalt unwiderruflich löschen?")) {
           await change({ path: next, deleteFolder: "1", recursive: "1" }, "DELETE", undefined, undefined, selected, location);
         }
-      }));
-      row("Ordner: " + item.name, controls);
+      }, "sso-button-danger"));
+      addEntry("Ordner " + item.name, controls);
     }
     for (const item of projects) {
       const download = document.createElement("a"); download.textContent = "Herunterladen";
+      download.className = "sso-button";
       download.href = url({ fileName: item.fileName }, selected, location); download.download = item.fileName;
       const controls = [download];
       if (current.canWrite) controls.push(button("Umbenennen", async () => {
@@ -94,14 +117,15 @@
       }));
       if (current.canDelete) controls.push(button("Löschen", async () => {
         if (window.confirm("Datei „" + item.fileName + "“ unwiderruflich löschen?")) await change({ fileName: item.fileName }, "DELETE", undefined, item.revision, selected, location);
-      }));
-      row(item.fileName, controls);
+      }, "sso-button-danger"));
+      addEntry(item.fileName, controls);
     }
     message((projects.length + list.folders.length ? "Liste geladen." : "Dieser Ordner ist leer.") + (current.canDelete ? "" : " Löschen ist in diesem Bereich nicht erlaubt."));
+    if (focusFolder && document.activeElement === document.body) folderHeading.focus();
   }
   document.getElementById("refresh").addEventListener("click", action(load));
   owner.addEventListener("change", action(async () => { path = ""; await load(); }));
-  up.addEventListener("click", action(async () => { path = path.split("/").slice(0,-1).join("/"); await load(); }));
+  up.addEventListener("click", action(async () => { path = path.split("/").slice(0,-1).join("/"); await load(true); }));
   upload.addEventListener("submit", action(async () => {
     const file = document.getElementById("project").files[0]; if (!file) return;
     const existing = projects.find(item => item.fileName === file.name);

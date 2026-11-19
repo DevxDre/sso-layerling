@@ -26,6 +26,65 @@ async function evaluate(expression){const r=await command('Runtime.evaluate',{ex
 async function waitFor(expression,label,timeout=45000){const end=Date.now()+timeout;while(Date.now()<end){if(await evaluate(expression))return;await delay(150);}throw new Error('Timeout: '+label);}
 async function cookies(values){for(const[name,value]of Object.entries(values))await command('Network.setCookie',{name,value,url:fixture.origin+'/',httpOnly:true,sameSite:'Lax'});}
 async function navigate(path){await command('Page.navigate',{url:fixture.origin+path});await waitFor("document.readyState==='complete' && document.documentElement.dataset.ssoCad==='ready'",'editor online');}
+async function checkNarrowPage() {
+  for (const width of [320, 390]) {
+    await command('Emulation.setDeviceMetricsOverride', {width, height:844, deviceScaleFactor:1, mobile:false});
+    assert.equal(await evaluate('document.documentElement.scrollWidth'), width, 'page fits at ' + width + 'px');
+  }
+}
+
+async function testAccount() {
+  await evaluate("document.querySelector('.sso-topbar a[href=\"/konto/\"]').click()");
+  await waitFor("location.pathname === '/konto/' && document.querySelector('.sso-brand img')?.naturalWidth > 0", 'account page with Layerling logo');
+  const profile = await evaluate("[...document.querySelectorAll('.sso-card > .sso-account-data > dd')].map(field => field.textContent)");
+  assert.deepEqual(profile, [fixture.accountName, fixture.accountId, '–']);
+  const details = "document.querySelector('.sso-account-details')";
+  assert.equal(await evaluate(details + '.open'), false, 'technical details are initially collapsed');
+  await evaluate(details + ".querySelector('summary').click()");
+  assert.equal(await evaluate(details + '.open'), true, 'technical details can be expanded');
+  await checkNarrowPage();
+  await evaluate("document.querySelector('form[action=\"/auth/logout.php\"] button').click()");
+  const login = "document.querySelector('form[action=\"/auth/start.php\"] button')";
+  await waitFor("location.pathname === '/index.php' && " + login + "?.classList.contains('sso-button-primary')", 'account logout returns to the styled manual sign-in');
+  await checkNarrowPage();
+}
+
+async function testPermissions() {
+  await cookies(fixture.adminCookies);
+  await command('Page.navigate', {url: fixture.origin + '/rechte.php'});
+  await waitFor("document.querySelector('.sso-brand img')?.naturalWidth > 0", 'rights page with Layerling logo');
+  await checkNarrowPage();
+  const actor = 'group:' + 'Konstruktionswerkstatt'.repeat(5);
+  await evaluate(`(() => {
+    const field = document.querySelector('#accounts-actor');
+    field.value = ${JSON.stringify(actor)};
+    field.form.elements.owner.value = 'role:target-fixture';
+    field.form.requestSubmit();
+  })()`);
+  await waitFor("location.search === '?saved=1' && document.querySelector('.sso-rule-table')?.textContent.includes("
+    + JSON.stringify(actor) + ')', 'saved rule is displayed with its full group ID');
+  await checkNarrowPage();
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('.sso-rule-label')).display"), 'block', 'mobile cells have labels');
+
+  await evaluate(`(() => {
+    const field = document.querySelector('#group-pattern');
+    field.value = '.*';
+    field.form.requestSubmit(field.form.querySelector('button'));
+  })()`);
+  await waitFor("document.readyState === 'complete' && document.querySelector('#group-pattern-error') !== null", 'invalid pattern has field feedback');
+  assert.equal(await evaluate("document.querySelector('#group-pattern').value"), '.*');
+  await waitFor("document.activeElement.id === 'group-pattern'", 'focus returns to the invalid field');
+  const pattern = 'konstruktionswerkstatt'.repeat(5) + '^';
+  await evaluate(`(() => {
+    const field = document.querySelector('#group-pattern');
+    field.value = ${JSON.stringify(pattern)};
+    field.form.requestSubmit(field.form.querySelector('button'));
+  })()`);
+  await waitFor("document.querySelector('.sso-patterns code')?.textContent === " + JSON.stringify(pattern), 'corrected filter is saved');
+  await checkNarrowPage();
+  await command('Emulation.setDeviceMetricsOverride', {width:1280, height:900, deviceScaleFactor:1, mobile:false});
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('.sso-rule-table')).display"), 'table', 'desktop uses a table');
+}
 async function enterSearch(value) {
   await evaluate(`(() => {
     const field = document.activeElement;
@@ -402,9 +461,12 @@ try{
   await cookies(fixture.teacherCookies);
   await command('Page.navigate',{url:fixture.origin+'/vorlagen.php'});
   await waitFor("document.querySelector('#publish-template input[type=file]')!==null",'template publish form');
+  await waitFor("document.querySelector('.sso-brand img')?.naturalWidth > 0", 'Layerling logo loads on the template page');
+  await checkNarrowPage();
+  const instructions = 'Ergänze den Entwurf.\n\nhttps://material.example.invalid/' + 'konstruktionswerkstatt'.repeat(12);
   await evaluate(`(() => {
     document.querySelector('[name=title]').value = 'CAD Aufgabe';
-    document.querySelector('[name=instructions]').value = 'Ergänze den Entwurf.';
+    document.querySelector('[name=instructions]').value = ${JSON.stringify(instructions)};
     document.querySelector('input[value="cad-class"]').checked = true;
   })()`);
   const {root: {nodeId: documentId}} = await command('DOM.getDocument');
@@ -423,10 +485,23 @@ try{
     await openFooter();
     await evaluate("document.querySelector('#sso-cad-nav a[href=\"/vorlagen.php\"]').click()");
     await waitFor("document.querySelector('[data-copy-template]')!==null",'student sees classroom template');
-    await evaluate("document.querySelector('[data-copy-template]').requestSubmit()");
-    await waitFor("document.getElementById('status')?.textContent.includes('liegt jetzt')",'own copy saved');
-    await evaluate("document.querySelector('[data-copy-template]').requestSubmit()");
-    await waitFor("document.getElementById('status')?.textContent.includes('bereits belegt')",'repeat copy cannot overwrite');
+    await checkNarrowPage();
+    const copyForm = "document.querySelector('[data-copy-template]')";
+    const copyStatus = copyForm + ".querySelector('[data-template-status]')";
+    for (const feedback of ['liegt jetzt', 'bereits belegt']) {
+      await evaluate(`(() => {
+        const button = ${copyForm}.querySelector('button');
+        button.scrollIntoView({block:'end'});
+        button.focus();
+        button.click();
+      })()`);
+      await waitFor(copyStatus + '.textContent.includes(' + JSON.stringify(feedback) + ')', 'inline feedback: ' + feedback);
+      assert.equal(await evaluate(`(() => {
+        const rect = ${copyStatus}.getBoundingClientRect();
+        return rect.top >= 0 && rect.bottom <= innerHeight;
+      })()`), true, 'copy feedback remains visible');
+    }
+    await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
     await navigate('/cad.php');
     await focusDesignSearch();
     await enterSearch('CAD Aufgabe');
@@ -441,15 +516,43 @@ try{
     await command('Page.reload',{ignoreCache:true});
     await waitFor("document.readyState==='complete' && document.documentElement.dataset.ssoCad==='ready' && document.querySelector('.three-workplane-host canvas')!==null",'own edited copy reopens');
   }
+
+  stage = 'file page at narrow widths';
+  await command('Page.navigate', {url:fixture.origin + '/files/'});
+  await waitFor("document.querySelector('#owner:not(:disabled)') !== null", 'file list loaded');
+  await waitFor("document.querySelector('.sso-brand img')?.naturalWidth > 0", 'Layerling logo loads on the file page');
+  await checkNarrowPage();
+  let path = '';
+  for (const name of ['Konstruktionswerkstatt', 'Abschlussprojekt'].map(word => word.repeat(3))) {
+    await evaluate(`(() => {
+      const input = document.getElementById('folderName');
+      input.value = ${JSON.stringify(name)};
+      input.form.requestSubmit();
+    })()`);
+    const open = "document.querySelector('#entries button[aria-label=" + JSON.stringify('Öffnen – Ordner ' + name) + "]')";
+    await waitFor(open + ' !== null', 'new folder is listed');
+    await evaluate(`(() => { const button = ${open}; button.focus(); button.click(); })()`);
+    path += '/' + name;
+    await waitFor("document.querySelector('#path').textContent === " + JSON.stringify(path), 'new folder path is shown');
+    assert.equal(await evaluate("document.activeElement.id"), 'folder-heading', 'focus follows folder navigation');
+    await checkNarrowPage();
+  }
+  await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
+  await navigate('/cad.php');
+
   stage='logout from SSO footer';
   await openFooter();
   await evaluate("document.querySelector('#sso-cad-nav button[type=submit]').click()");
   await waitFor("location.pathname==='/index.php' && document.querySelector('form[action=\"/auth/start.php\"]')!==null", 'footer logout returns to manual IServ login');
+  stage = 'permissions page at narrow widths';
+  await testPermissions();
+  stage = 'account and manual login at narrow widths';
+  await testAccount();
   assert.deepEqual(errors,[],'no uncaught script errors');
   process.stdout.write('CAD_BROWSER_OK: geometry save/reopen, filtered owner selection, nested project search, search errors and truncation, rights, cache isolation and logout\n');
   }
 }catch(error){
-  let state={};if(ws?.readyState===1)try{state=await evaluate("({url:location.pathname+location.search,templateStatus:document.getElementById('status')?.textContent,templateNames:Array.from(document.querySelectorAll('[data-copy-template] input[name=name]')).map(input=>input.value),state:document.documentElement.dataset.ssoCad,reason:document.getElementById('sso-cad-status')?.textContent,buttons:Array.from(document.querySelectorAll('button')).slice(0,18).map(b=>b.textContent.slice(0,70)),errors:"+JSON.stringify(errors)+"})");}catch{}
+  let state={};if(ws?.readyState===1)try{state=await evaluate("({url:location.pathname+location.search,templateStatus:Array.from(document.querySelectorAll('[data-template-status]')).map(status=>status.textContent).filter(Boolean),templateNames:Array.from(document.querySelectorAll('[data-copy-template] input[name=name]')).map(input=>input.value),state:document.documentElement.dataset.ssoCad,reason:document.getElementById('sso-cad-status')?.textContent,buttons:Array.from(document.querySelectorAll('button')).slice(0,18).map(b=>b.textContent.slice(0,70)),errors:"+JSON.stringify(errors)+"})");}catch{}
   if(!fixture.mcp && !fixture.demo && ws?.readyState===1)try{const shot=await command('Page.captureScreenshot',{format:'png'});await writeFile('/private/tmp/sso-layerling-cad-failure.png',Buffer.from(shot.data,'base64'));}catch{}
   process.stderr.write(stage+': '+error.message+'\n'+JSON.stringify(state)+'\n');process.exitCode=1;
 }finally{

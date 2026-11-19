@@ -188,6 +188,8 @@ try {
     } else {
         if ($storageTest) {
             $publicFiles = [...$managedFiles, ...$templateFiles, ...$permissionsFiles];
+        } elseif (is_file($package.'/private/app/src/Oidc/entry-page.php')) {
+            $publicFiles[] = 'files.css';
         }
         $expectedPublic = array_keys($packagePublic);
         sort($expectedPublic);

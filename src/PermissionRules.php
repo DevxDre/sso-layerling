@@ -34,7 +34,8 @@ final class PermissionRules
             throw new \RuntimeException('Invalid permission file');
         }
         foreach ($data['rules'] as $rule) {
-            if (!is_array($rule) || self::normalize($rule) !== $rule || isset($this->rules[self::key($rule)])) {
+            if (!is_array($rule) || self::ruleError($rule) !== null
+                || self::normalize($rule) !== $rule || isset($this->rules[self::key($rule)])) {
                 throw new \RuntimeException('Invalid permission rule');
             }
             $this->rules[self::key($rule)] = $rule;
@@ -52,21 +53,27 @@ final class PermissionRules
         return is_string($value) && preg_match('/^(?:group:[A-Za-z0-9_-]{1,128}|role:[A-Za-z0-9_.:-]{1,100})$/D', $value) === 1;
     }
 
-    private static function normalize(array $input): ?array
+    private static function ruleError(array $input): ?string
     {
-        $actor = $input['actor'] ?? null;
-        $owner = $input['owner'] ?? '';
+        if (!self::selector($input['actor'] ?? null)) {
+            return 'actor';
+        }
         $operation = $input['operation'] ?? null;
-        $effect = $input['effect'] ?? null;
-        if (!self::selector($actor) || !is_string($operation) || !isset(self::OPERATIONS[$operation])
-            || !in_array($effect, ['allow', 'deny'], true)) {
-            return null;
+        if (!is_string($operation) || !isset(self::OPERATIONS[$operation])) {
+            return 'operation';
         }
         $needsOwner = in_array($operation, ['read', 'write', 'delete'], true);
+        $owner = $input['owner'] ?? '';
         if ($needsOwner ? !self::selector($owner) : $owner !== '') {
-            return null;
+            return 'owner';
         }
-        return compact('actor', 'owner', 'operation', 'effect');
+        return in_array($input['effect'] ?? null, ['allow', 'deny'], true) ? null : 'effect';
+    }
+
+    private static function normalize(array $input): array
+    {
+        return ['actor' => $input['actor'], 'owner' => $input['owner'] ?? '',
+            'operation' => $input['operation'], 'effect' => $input['effect']];
     }
 
     private static function validPattern(mixed $value): bool
@@ -82,38 +89,40 @@ final class PermissionRules
     public function rules(): array { return $this->rules; }
     public function patterns(): array { return $this->patterns; }
 
-    public function change(array $form): bool
+    /** Returns null after saving, a field name for invalid input, or 'form' for other rejections. */
+    public function change(array $form): ?string
     {
         $action = $form['action'] ?? null;
         if ($action === 'save-rule') {
-            $rule = self::normalize($form);
-            if ($rule === null) {
-                return false;
+            $error = self::ruleError($form);
+            if ($error !== null) {
+                return $error;
             }
+            $rule = self::normalize($form);
             $this->rules[self::key($rule)] = $rule;
         } elseif ($action === 'remove-rule') {
             $key = $form['key'] ?? null;
             if (!is_string($key) || !isset($this->rules[$key]) || $this->rules[$key]['effect'] !== ($form['effect'] ?? null)) {
-                return false;
+                return 'form';
             }
             unset($this->rules[$key]);
         } elseif (in_array($action, ['add-pattern', 'remove-pattern'], true)) {
             $pattern = $form['pattern'] ?? null;
             if (!self::validPattern($pattern)) {
-                return false;
+                return 'pattern';
             }
             $this->patterns = array_values(array_diff($this->patterns, [$pattern]));
             if ($action === 'add-pattern') {
                 $this->patterns[] = $pattern;
             }
         } else {
-            return false;
+            return 'form';
         }
 
         $json = json_encode(['version' => 1, 'rules' => array_values($this->rules),
             'patterns' => $this->patterns], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
         if (strlen($json) > self::LIMIT) {
-            return false;
+            return 'form';
         }
         $tmp = tempnam(dirname($this->path), '.permissions-');
         try {
@@ -125,7 +134,7 @@ final class PermissionRules
                 unlink($tmp);
             }
         }
-        return true;
+        return null;
     }
 
     private static function matches(array $record, string $selector): bool

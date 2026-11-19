@@ -2,7 +2,6 @@
 
 (() => {
   const csrf = document.querySelector('meta[name="sso-csrf"]').content;
-  const status = document.getElementById('status');
   let busy = false;
 
   async function request(url, options = {}) {
@@ -30,31 +29,40 @@
     throw new Error(messages[data.error] || messages[response.status] || 'Der Server konnte die Aktion nicht abschließen.');
   }
 
-  function action(handler) {
+  function action(container, handler) {
+    const status = container.querySelector('[data-template-status]');
     return async event => {
       event.preventDefault();
       if (busy) return;
       busy = true;
+      delete status.dataset.state;
       status.textContent = 'Wird verarbeitet …';
       try {
-        await handler(event.currentTarget);
+        await handler(event.currentTarget, status);
       } catch (error) {
+        status.dataset.state = 'error';
         status.textContent = error instanceof TypeError
           ? 'Die Verbindung ist unterbrochen. Bitte den Stand prüfen, bevor du es erneut versuchst.'
           : error.message;
       } finally {
         busy = false;
+        if (status.dataset.state && container.contains(document.activeElement)) {
+          status.scrollIntoView({block: 'nearest'});
+        }
       }
     };
   }
 
-  document.getElementById('publish-template')?.addEventListener('submit', action(async form => {
-    await request('/vorlagen.php?action=publish', {method: 'POST', body: new FormData(form)});
-    location.reload();
-  }));
+  const publishForm = document.getElementById('publish-template');
+  if (publishForm) {
+    publishForm.addEventListener('submit', action(publishForm, async form => {
+      await request('/vorlagen.php?action=publish', {method: 'POST', body: new FormData(form)});
+      location.reload();
+    }));
+  }
 
   for (const button of document.querySelectorAll('[data-withdraw-template]')) {
-    button.addEventListener('click', action(async button => {
+    button.addEventListener('click', action(button.parentElement, async (button, status) => {
       if (!window.confirm('Vorlage zurückziehen? Bereits erstellte Kopien bleiben erhalten.')) {
         status.textContent = '';
         return;
@@ -68,7 +76,7 @@
   }
 
   for (const form of document.querySelectorAll('[data-copy-template]')) {
-    form.addEventListener('submit', action(async form => {
+    form.addEventListener('submit', action(form, async (form, status) => {
       const name = new FormData(form).get('name').trim();
       if (!name) throw new Error('Bitte einen Entwurfsnamen eingeben.');
       const template = await request('/vorlagen.php?' + new URLSearchParams({id: form.dataset.copyTemplate}));
@@ -78,6 +86,7 @@
         body: await template.blob(),
       });
       const {project} = await response.json();
+      status.dataset.state = 'success';
       status.textContent = '„' + project.name + '“ liegt jetzt in deinen eigenen Dateien.';
     }));
   }

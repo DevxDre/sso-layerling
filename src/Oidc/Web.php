@@ -162,45 +162,14 @@ final class Web
         // same-origin form provenance; callback/redirect/error defaults stay no-referrer.
         header('Referrer-Policy: same-origin');
         $issuerOrigin = $this->config->profile->issuerOrigin();
-        header("Content-Security-Policy: default-src 'none'; form-action 'self' $issuerOrigin; frame-ancestors 'none'; base-uri 'none'");
+        header("Content-Security-Policy: default-src 'none'; style-src 'self'; img-src 'self'; form-action 'self' $issuerOrigin; frame-ancestors 'none'; base-uri 'none'");
         header('Content-Type: text/html; charset=utf-8');
-        $e = static fn(string $s) => htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $provider = $e($this->config->profile->provider['name']);
-        $title = $account ? 'SSO Layerling – Konto' : ($hasCad ? 'SSO Layerling' : 'SSO Layerling – SSO-Test');
-        echo '<!doctype html><html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>' . $title . '</title><main><h1>' . $title . '</h1>';
-        if (!$account) {
-            echo $this->storage !== null
-                ? ($hasCad
-                    ? '<p>Mit ' . $provider . ' anmelden und Layerling öffnen.</p>'
-                    : '<p>Der Dateitest ist freigeschaltet. Der CAD-Editor folgt im nächsten Schritt.</p>')
-                : '<p>Dieser Test prüft die Anmeldung über ' . $provider . '. Der CAD-Editor und Dateizugriffe sind noch nicht freigeschaltet.</p>';
-        }
-        if ($session !== null) {
-            echo '<p>Anmeldung über ' . $provider . ' erfolgreich.</p><h2>Geprüfte Angaben des eigenen Kontos</h2>';
-            if ($profile !== null) {
-                $username = $session['diagnostic']['preferredUsername'] ?? '';
-                echo '<p>Account: ' . $e(trim($username) === '' ? '–' : $username) . '</p>';
-                echo '<p>Name: ' . $e($profile['name'] ?? '–') . '</p>';
-                echo '<p>Klasse: ' . $e($profile['classes'] === [] ? '–' : implode(', ', $profile['classes'])) . '</p>';
-            }
-            echo '<p>Rollen: ' . $e(implode(', ', $session['diagnostic']['roles'])) . '</p>';
-            echo '<p>Gruppenanzahl: ' . (int)$session['diagnostic']['groupCount'] . '</p><ul>';
-            foreach ($session['diagnostic']['relevantGroups'] as $group) {
-                if (in_array($group['id'], $this->config->profile->diagnosticGroupIds, true)) {
-                    echo '<li>' . $e($group['name']) . ': <code>' . $e($group['id']) . '</code></li>';
-                }
-            }
-            echo '</ul>';
-            if ($this->storage === null) { echo '<p>Diese Angaben schalten keine Fremddateirechte frei.</p>'; }
-        }
-        if ($account) { echo '<p><a href="/cad.php">Zum CAD-Editor</a></p>'; }
-        if ($canManagePermissions) { echo '<p><a href="/rechte.php">Rechte verwalten</a></p>'; }
-        if ($templateAccess && ($templateAccess['teacher'] || $templateAccess['student'])) {
-            echo '<p><a href="/vorlagen.php">CAD-Vorlagen</a></p>';
-        }
-        echo '<form method="post" action="' . ($session ? '/auth/logout.php' : '/auth/start.php') . '"><input type="hidden" name="csrf" value="' . $e($csrf) . '"><button>' . ($session ? 'Lokal abmelden' : 'Mit ' . $provider . ' anmelden') . '</button></form>';
-        if (!$session) { echo '<form method="post" action="/auth/logout.php"><input type="hidden" name="csrf" value="' . $e($csrf) . '"><button>Laufende Anmeldung abbrechen</button></form>'; }
-        echo '</main></html>';
+        $provider = $this->config->profile->provider['name'];
+        $hasStorage = $this->storage !== null;
+        $diagnostic = $session['diagnostic'] ?? null;
+        $diagnosticGroups = array_filter($diagnostic['relevantGroups'] ?? [],
+            fn(array $group): bool => in_array($group['id'], $this->config->profile->diagnosticGroupIds, true));
+        require __DIR__ . '/entry-page.php';
         exit;
     }
     public function permissions(): never
@@ -228,16 +197,21 @@ final class Web
             $this->denyPermissions(403);
         }
         [$rules, $patterns, $selectors, $groupNames] = $policy->permissionSettings();
-        if ($changing && $policy->changePermissions($_POST, $groupNames)) {
-            $this->redirect('/rechte.php?saved=1');
+        $error = null;
+        if ($changing) {
+            $error = $policy->changePermissions($_POST, $groupNames);
+            if ($error === null) {
+                $this->redirect('/rechte.php?saved=1');
+            }
+            http_response_code(400);
         }
-        $invalid = $changing;
-        if ($invalid) { http_response_code(400); }
+        $submitted = $changing ? $_POST : [];
+        $hasCad = $this->hasCad();
         $groupNamesVersion = SsoPolicy::groupNamesVersion($groupNames);
         unset($policy);
         session_write_close();
         header('Referrer-Policy: same-origin');
-        header("Content-Security-Policy: default-src 'none'; style-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
+        header("Content-Security-Policy: default-src 'none'; style-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
         require __DIR__ . '/permissions-page.php';
         exit;
     }
@@ -265,7 +239,7 @@ final class Web
         $ctx->close();
         $hasCad = $this->hasCad();
         header('Referrer-Policy: same-origin');
-        header("Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
+        header("Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
         header('Content-Type: text/html; charset=utf-8');
         require __DIR__ . '/files-template.php';
         exit;

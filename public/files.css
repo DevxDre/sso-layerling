@@ -1,12 +1,292 @@
-body { font: 16px/1.5 system-ui, sans-serif; margin: 0; background: #f3f5f7; color: #18232f; }
-main { max-width: 960px; margin: 2rem auto; padding: 1.5rem; background: white; border-radius: 10px; }
-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
-h1 { font-size: 1.65rem; } form, nav { margin: 1rem 0; } button, input, select { font: inherit; }
-button, select, input[type=file] { padding: .4rem .65rem; } button { cursor: pointer; } button:disabled { cursor: default; }
-table { border-collapse: collapse; width: 100%; } th, td { padding: .7rem; border-bottom: 1px solid #dde2e7; text-align: left; overflow-wrap: anywhere; }
-td button, td a { margin-right: .6rem; } #status { min-height: 1.5rem; padding: .7rem; background: #edf3f9; }
-@media (max-width: 650px) { main { margin: 0; padding: 1rem; border-radius: 0; } td button, td a { display: block; margin: .3rem 0; } }
-.permissions-table { overflow-x: auto; }
-.permissions-table form, .permission-patterns form { margin: 0; }
-.permission-patterns li { margin: .5rem 0; }
-.permission-patterns button { margin-left: .6rem; }
+/* Dashboard colors and UI type stack from the Layerling pin. */
+.sso-page {
+  --sso-background: #faf7f3;
+  --sso-surface: #fff;
+  --sso-foreground: #573f26;
+  --sso-heading: #231a11;
+  --sso-muted: #6c5640;
+  --sso-border: #ede4d4;
+  --sso-control-border: #9e8c78;
+  --sso-accent: #8a4605;
+  --sso-focus: #b46007;
+  --sso-hover: #fbefdf;
+  --sso-danger: #922c26;
+  --sso-gutter: clamp(.875rem, 3vw, 2rem);
+  --sso-width: 64rem;
+  --sso-font: "Avenir Next", Avenir, "Helvetica Neue", Arial, sans-serif;
+  margin: 0;
+  color: var(--sso-foreground);
+  background: var(--sso-background);
+  font: 1rem/1.5 var(--sso-font);
+}
+
+.sso-page *, .sso-page *::before, .sso-page *::after { box-sizing: border-box; }
+.sso-page :is(h1, h2, h3) { margin: 0; color: var(--sso-heading); line-height: 1.25; hyphens: auto; }
+.sso-page h1 { font-size: clamp(1.75rem, 4vw, 2.25rem); }
+.sso-page h2 { font-size: 1.25rem; }
+.sso-page h3 { font-size: 1.125rem; }
+.sso-page p { margin: 0; }
+.sso-page :focus-visible, .sso-folder-heading:focus { outline: 3px solid var(--sso-focus); outline-offset: 3px; }
+
+.sso-topbar {
+  background: var(--sso-surface);
+  border-bottom: 1px solid var(--sso-border);
+}
+
+.sso-topbar-inner, .sso-content {
+  max-inline-size: var(--sso-width);
+  margin-inline: auto;
+  padding-inline: var(--sso-gutter);
+}
+
+.sso-topbar-inner, .sso-page-heading, .sso-folder-nav, .sso-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem .875rem;
+}
+
+.sso-topbar-inner, .sso-page-heading, .sso-folder-nav { justify-content: space-between; }
+.sso-topbar-inner { padding-block: .75rem; }
+
+.sso-brand {
+  display: inline-flex;
+  gap: .625rem;
+  align-items: center;
+  color: var(--sso-heading);
+  font: 600 1.375rem/1.4 Arial, Helvetica, sans-serif;
+  letter-spacing: -.035em;
+}
+
+.sso-brand img { flex: none; }
+
+.sso-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  padding-block: clamp(1rem, 4vw, 2rem) 2rem;
+}
+
+.sso-login { max-inline-size: 36rem; }
+.sso-login form { min-inline-size: 0; max-inline-size: 100%; }
+
+.sso-account-data {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: .5rem 1rem;
+  margin-block-end: 0;
+}
+
+.sso-account-data dt { font-weight: 600; }
+.sso-account-data dd { min-inline-size: 0; margin: 0; }
+.sso-account-details { border-top: 1px solid var(--sso-border); }
+.sso-account-details summary { padding-block: .75rem; font-weight: 600; cursor: pointer; }
+.sso-account-details dl { margin-block-start: 0; }
+.sso-account-groups { margin: 0; padding-inline-start: 1.25rem; }
+
+.sso-card {
+  min-inline-size: 0;
+  padding: clamp(.875rem, 2vw, 1.25rem);
+  background: var(--sso-surface);
+  border: 1px solid var(--sso-border);
+  border-radius: .5rem;
+  box-shadow: 0 1px 2px rgb(71 52 31 / 5%);
+}
+
+.sso-card:not(.sso-form-row) > * + * { margin-block-start: .875rem; }
+.sso-card > p:not(.sso-status) { margin-block-start: .875rem; }
+.sso-wrap, .sso-status { overflow-wrap: anywhere; }
+.sso-instructions { white-space: pre-wrap; }
+
+.sso-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 2.75rem;
+  max-inline-size: 100%;
+  padding: .45rem .75rem;
+  border: 1px solid var(--sso-control-border);
+  border-radius: .5rem;
+  background: var(--sso-surface);
+  color: var(--sso-foreground);
+  font: 600 .9375rem/1.3 var(--sso-font);
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.sso-button:hover:not(:disabled) { background: var(--sso-hover); }
+.sso-button:disabled { cursor: default; opacity: .55; }
+.sso-button-primary { color: white; background: var(--sso-accent); border-color: var(--sso-accent); }
+.sso-button-primary:hover:not(:disabled) { background: #723b07; }
+.sso-button-danger { color: var(--sso-danger); }
+
+.sso-form-row, .sso-file-tools, .sso-form-fields, .sso-template-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: .75rem;
+}
+
+.sso-form-row { align-items: end; justify-items: start; }
+.sso-form-fields { justify-items: start; max-inline-size: 42rem; }
+.sso-template-list { gap: .875rem; }
+.sso-template-list > h2 { margin-block: .375rem .125rem; }
+
+.sso-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: .25rem;
+  inline-size: 100%;
+  min-inline-size: 0;
+  font-weight: 600;
+}
+
+.sso-field :is(input, select, textarea) {
+  inline-size: 100%;
+  min-inline-size: 0;
+  min-block-size: 2.75rem;
+  padding: .45rem .65rem;
+  border: 1px solid var(--sso-control-border);
+  border-radius: .5rem;
+  background: var(--sso-surface);
+  color: var(--sso-foreground);
+  font: 400 1rem/1.4 var(--sso-font);
+}
+
+.sso-field input[type="file"] { padding: .375rem; font-size: .875rem; }
+.sso-field input::file-selector-button {
+  margin-inline-end: .5rem;
+  padding: .3rem .4rem;
+  border: 1px solid var(--sso-control-border);
+  border-radius: .375rem;
+  background: var(--sso-hover);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.sso-field textarea { resize: vertical; }
+
+.sso-groups {
+  inline-size: 100%;
+  min-inline-size: 0;
+  margin: 0;
+  padding: .375rem .75rem;
+  border: 1px solid var(--sso-control-border);
+  border-radius: .5rem;
+}
+
+.sso-groups legend { padding-inline: .25rem; font-weight: 600; }
+.sso-group { display: flex; align-items: baseline; gap: .5rem; min-block-size: 2.75rem; padding-block: .5rem; }
+.sso-group input { flex: none; margin: 0; accent-color: var(--sso-accent); }
+
+.sso-folder-nav { margin-block-start: 1rem; padding-block-start: 1rem; border-top: 1px solid var(--sso-border); }
+.sso-folder-nav .sso-folder-heading { min-inline-size: 0; font-size: 1rem; }
+
+.sso-file-list {
+  display: grid;
+  gap: .5rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.sso-file-list:empty { display: none; }
+.sso-file-entry { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .875rem; }
+.sso-file-entry > .sso-actions { margin: 0; column-gap: .5rem; }
+.sso-file-name { flex: 1 1 16rem; min-inline-size: 0; font-weight: 600; }
+
+.sso-status:not(:empty) {
+  padding: .625rem .75rem;
+  border-radius: .5rem;
+  background: var(--sso-hover);
+  color: var(--sso-muted);
+}
+
+.sso-page form .sso-status:not(:empty), .sso-card div > .sso-status:not(:empty) { margin-block-start: .625rem; }
+.sso-status[data-state="error"] { background: #fbecea; color: var(--sso-danger); }
+.sso-status[data-state="success"] { background: #e9f3e8; color: #24562a; }
+
+.sso-rule-forms {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.sso-field-help, .sso-field-error {
+  font-size: .9375rem;
+  font-weight: 400;
+}
+
+.sso-field-help { color: var(--sso-muted); }
+.sso-field-error { color: var(--sso-danger); }
+.sso-form-row + .sso-field-error { margin-block-start: .5rem; }
+.sso-field :is(input, select)[aria-invalid="true"] { border-color: var(--sso-danger); }
+
+.sso-rule-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  text-align: start;
+}
+
+.sso-rule-table :is(th, td) {
+  padding: .625rem;
+  border-bottom: 1px solid var(--sso-border);
+  vertical-align: top;
+}
+
+.sso-rule-table th { text-align: start; }
+.sso-rule-table tr:last-child td { border-bottom: 0; }
+.sso-rule-label { display: none; }
+
+.sso-patterns {
+  display: grid;
+  gap: .5rem;
+  padding: 0;
+  margin-block-end: 0;
+  list-style: none;
+}
+
+.sso-patterns li { padding-block-start: .5rem; border-top: 1px solid var(--sso-border); }
+.sso-patterns form { align-items: center; }
+
+@media (min-width: 46rem) {
+  .sso-rule-forms { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 45.999rem) {
+  .sso-rule-table, .sso-rule-table tbody { display: block; }
+  .sso-rule-table thead {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .sso-rule-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: .5rem;
+    padding-block: .75rem;
+    border-top: 1px solid var(--sso-border);
+  }
+  .sso-rule-table td { display: block; padding: 0; border: 0; }
+  .sso-rule-label { display: block; color: var(--sso-muted); font-size: .875rem; font-weight: 600; }
+}
+
+@media (max-width: 30rem) {
+  .sso-topbar-inner { column-gap: .5rem; }
+  .sso-brand { gap: .5rem; font-size: 1.25rem; }
+  .sso-brand img { inline-size: 2rem; block-size: 2rem; }
+  .sso-account-data { grid-template-columns: minmax(0, 1fr); row-gap: .25rem; }
+  .sso-account-data dt:not(:first-child) { margin-block-start: .5rem; }
+}
+
+@media (min-width: 38rem) {
+  .sso-form-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .sso-file-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (min-width: 38rem) and (max-width: 50rem) {
+  .sso-file-tools > .sso-form-row { grid-template-columns: minmax(0, 1fr); }
+}

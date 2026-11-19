@@ -40,7 +40,8 @@ class StorageInstallTest(unittest.TestCase):
     def test_03_managed_downgrade_removes_api_but_keeps_projects(self):
         self.assertEqual(self.install().returncode,0);data=self.base/'private/projects/keep';data.write_text('kept')
         self.artifact=self.portal;r=self.install();self.assertEqual(r.returncode,0,r.stderr)
-        for name in ['files.php','files.js','files.css','store.php','owners.php','session.php']:self.assertFalse((self.public/name).exists())
+        for name in ['files.php','files.js','store.php','owners.php','session.php']:self.assertFalse((self.public/name).exists())
+        self.assertEqual((self.public/'files.css').read_bytes(), (self.portal/'public/files.css').read_bytes())
         self.assertEqual(data.read_text(),'kept');self.assertFalse((self.base/'private/app/storage.json').exists())
     def test_04_upstream_hash_mismatch_refused(self):
         path='private/app/upstream/store.php';f=self.artifact/path;f.write_bytes(f.read_bytes()+b'\n//tampered');self.refresh_hash(path)

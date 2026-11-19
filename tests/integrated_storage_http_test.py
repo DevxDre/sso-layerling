@@ -178,7 +178,18 @@ class IntegratedStorageTest(unittest.TestCase):
         self.assertEqual(tutor.request(path, 'POST', form | {'csrf': tutor.csrf})[0], 403)
         self.assertEqual(operator.request(path, 'POST', form | {'csrf': 'invalid'})[0], 403)
         self.assertEqual(operator.request(path, 'POST', form, {'Origin': 'https://foreign.invalid'})[0], 403)
-        self.assertEqual(operator.request(path, 'POST', form | {'pattern': '.*'})[0], 400)
+        invalid_pattern = operator.request(path, 'POST', form | {'pattern': '.*'})
+        self.assertEqual(invalid_pattern[0], 400)
+        self.assertRegex(invalid_pattern[2], rb'id="group-pattern"[^>]+value="\.\*"[^>]+aria-describedby="group-pattern-error" autofocus')
+        self.assertIn(b'id="group-pattern-error" role="alert"', invalid_pattern[2])
+        invalid_rule = operator.request(path, 'POST', {
+            'csrf': operator.csrf, 'action': 'save-rule', 'ruleForm': 'features',
+            'actor': 'Gruppe <Test>', 'operation': 'mcp', 'effect': 'deny',
+        })
+        self.assertEqual(invalid_rule[0], 400)
+        self.assertRegex(invalid_rule[2], rb'id="features-actor"[^>]+value="Gruppe &lt;Test&gt;"[^>]+aria-describedby="features-actor-error"')
+        self.assertIn(b'<option value="mcp" selected>', invalid_rule[2])
+        self.assertIn(b'<option value="deny" selected>', invalid_rule[2])
         self.assertFalse((self.private/'permissions.json').exists())
 
         original = self.json(self.upload(learner, 'original'), 201)['project']
@@ -215,9 +226,9 @@ class IntegratedStorageTest(unittest.TestCase):
         self.json(self.upload(tutor, 'denied', learner.owner, name='denied.lyl'), 403)
 
         saved_page = operator.request(path)[2]
-        self.assertIn(b'<td>groups:makerspace-lab</td>', saved_page)
-        self.assertIn(b'<td>groups:mentors</td>', saved_page)
-        self.assertIn(b'<td>group:legacy-only</td>', saved_page)
+        self.assertIn(b'<span class="sso-wrap">groups:makerspace-lab</span>', saved_page)
+        self.assertIn(b'<span class="sso-wrap">groups:mentors</span>', saved_page)
+        self.assertIn(b'<span class="sso-wrap">group:legacy-only</span>', saved_page)
         keys = re.findall(rb'name="key" value="([a-f0-9]{64})"', saved_page)
         self.assertEqual(len(keys), 5)
         self.assertEqual(operator.request(path, 'POST', {
@@ -227,12 +238,18 @@ class IntegratedStorageTest(unittest.TestCase):
 
         self.login(groups=['lab'], group_acts={'lab': 'renamed-lab'})
         self.login(U2, ['ROLE_ADMIN'], [ADMIN, 'other-lab'], group_acts={'other-lab': 'makerspace-lab'})
-        self.assertEqual(operator.request(path, 'POST', {
+        rules_before = (self.private/'permissions.json').read_bytes()
+        outdated = operator.request(path, 'POST', {
             'csrf': operator.csrf, 'action': 'save-rule', 'operation': 'read',
             'actor': teacher_role, 'owner': 'groups:makerspace-lab', 'effect': 'allow',
             'groupNamesVersion': group_names_version,
-        })[0], 400)
-        self.assertIn(b'<td>groups:renamed-lab</td>', operator.request(path)[2])
+        })
+        self.assertEqual(outdated[0], 400)
+        self.assertIn('Wähle die betroffenen Gruppenaccounts erneut aus.'.encode(), outdated[2])
+        self.assertRegex(outdated[2], rb'id="accounts-owner"[^>]+value=""')
+        self.assertRegex(outdated[2], rb'id="accounts-actor"[^>]+value="' + re.escape(teacher_role.encode()) + rb'"')
+        self.assertEqual((self.private/'permissions.json').read_bytes(), rules_before)
+        self.assertIn(b'<span class="sso-wrap">groups:renamed-lab</span>', operator.request(path)[2])
         self.assertEqual(self.raw(tutor, path=new_file)[2], project('changed'))
         self.dotenv.write_text(self.dotenv_defaults)
         self.assertEqual(operator.request(path)[0], 403)

@@ -22,6 +22,22 @@ nächsten Anmeldung des Eigentümers. Der Rechtevertrag ist in den
 [Architekturentscheidungen](adr/0001-sso-claims.md) und im
 [Berechtigungsmodell](sso-berechtigungsmodell.md) dokumentiert.
 
+Dateien und CAD-Vorlagen nutzen eine gemeinsame Kopfzeile und ein responsives
+Stylesheet mit Schrift und Farbwerten aus dem Layerling-Dashboard. Das CAD-Paket
+liefert das vorhandene Layerling-Logo, im reinen Dateitest steht der Schriftzug
+allein. Die Dateiansicht bricht lange Pfade um und setzt beim Ordnerwechsel den
+Tastaturfokus auf die Ordnerüberschrift. Kopiererfolg und Namenskonflikte erscheinen
+am Formular der ausgewählten Vorlage.
+
+Die Rechteverwaltung nutzt dieselbe Gestaltung. Gespeicherte Regeln erscheinen
+auf schmalen Ansichten mit beschrifteten Feldern. Bei Eingabefehlern bleiben
+die Formularwerte zur Korrektur erhalten. Haben sich die Gruppenvorschläge
+inzwischen geändert, müssen betroffene Gruppenaccounts erneut gewählt werden.
+
+Die Kontoseite und der manuelle Anmeldeeinstieg verwenden dieselbe Gestaltung.
+Im Konto stehen Name, Account und Klasse vor den aufklappbaren Angaben zu Rollen
+und Gruppen. Das Stylesheet ist auch im reinen SSO-Testpaket enthalten.
+
 ## Private Daten und bestehende Installationen
 
 Reale Zugangsdaten, Benutzer-/Gruppenkennungen, Betriebsnotizen und Installationsprotokolle

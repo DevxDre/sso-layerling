@@ -196,7 +196,7 @@ final class Gateway
         $csrf = $_SESSION['csrf'];
         $labels = $access['labels'] ?: ($_SESSION['diagnostic']['templateGroupLabels'] ?? []);
         $hasCad = is_file($this->sources . '/cad/index.html');
-        header("Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'");
+        header("Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'");
         // Same-origin JS POSTs need the configured Origin, not Origin:null.
         header('Referrer-Policy: same-origin');
         header('Content-Type: text/html; charset=utf-8');
