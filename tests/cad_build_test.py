@@ -73,4 +73,47 @@ class CadBuildTest(unittest.TestCase):
         result=subprocess.run([OPTIONS.php,str(ROOT/'scripts/install-sso-test.php'),'--package='+str(package),'--base='+str(self.root/'base'),'--public='+str(self.root/'www'),'--local-test'],capture_output=True,text=True)
         self.assertEqual(result.returncode,1);self.assertIn('Uncommitted or wrong-target package refused',result.stderr)
         self.assertFalse((self.root/'base').exists())
+
+    def test_explicit_layerling_update_keeps_reviewed_inputs(self):
+        scratch = self.root/'update'
+        scratch.mkdir()
+        fork = scratch/'fork'
+        subprocess.run(['git', 'clone', '--quiet', '--shared', '--no-checkout', str(OPTIONS.layerling), str(fork)], check=True)
+
+        def git(*args):
+            return subprocess.check_output(['git', '-C', str(fork), *args], text=True).strip()
+
+        def commit(paths):
+            git('add', *paths)
+            git('-c', 'user.name=Synthetic', '-c', 'user.email=synthetic@example.test',
+                '-c', 'core.hooksPath=/dev/null', 'commit', '--no-gpg-sign', '-qm', 'Synthetic CAD update')
+            return git('rev-parse', 'HEAD')
+
+        upstream, adapter = cad.pin()
+        git('checkout', '--quiet', '--detach', upstream['commit'])
+        lock_path = fork/'package-lock.json'
+        lock = json.loads(lock_path.read_text())
+        lock['version'] = lock['packages']['']['version'] = '9.9.9'
+        lock_path.write_text(json.dumps(lock))
+        compatible = commit(['package-lock.json'])
+        prepared = scratch/'prepared'
+        metadata = cad.prepare(fork, prepared, layerling_commit=compatible)
+        self.assertEqual(metadata['commit'], compatible)
+        cad.verify_source_tree(prepared, fork, layerling_commit=compatible)
+        with self.assertRaisesRegex(ValueError, 'Wrong source identity'):
+            cad.validate_source(prepared)
+
+        adapted_file = next(iter(adapter['preimages']))
+        with (fork/adapted_file).open('ab') as file:
+            file.write(b'\n// changed adapter input\n')
+        changed_preimage = commit([adapted_file])
+        with self.assertRaisesRegex(ValueError, 'Unreviewed source'):
+            cad.prepare(fork, scratch/'preimage-changed', layerling_commit=changed_preimage)
+
+        lock['packages']['']['dependencies']['fflate'] = '9.9.9'
+        lock_path.write_text(json.dumps(lock))
+        changed_dependencies = commit(['package-lock.json'])
+        with self.assertRaisesRegex(ValueError, 'dependencies changed'):
+            cad.prepare(fork, scratch/'dependencies-changed', layerling_commit=changed_dependencies)
+
 if __name__=='__main__':unittest.main(argv=[__file__]+remaining)

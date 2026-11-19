@@ -147,7 +147,7 @@ def metadata_json(values):
     return text
 
 
-def package(output: Path, installed_private: str = INSTALLED_PRIVATE, layerling: Path | None = None, installed_public: str = '/home/www/layerling', *, deployment_config_path: Path | None = None):
+def package(output: Path, installed_private: str = INSTALLED_PRIVATE, layerling: Path | None = None, installed_public: str = '/home/www/layerling', *, deployment_config_path: Path | None = None, layerling_commit: str | None = None):
     config = deployment_config(deployment_config_path)
     groups = config['groupBindings']
     profile = {key: config[key] for key in ['issuer', 'origin', 'provider', 'diagnosticGroupIds', 'studentRoleId']}
@@ -199,6 +199,8 @@ def package(output: Path, installed_private: str = INSTALLED_PRIVATE, layerling:
         if not installed_public.startswith('/') or any(c not in '/abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-' for c in installed_public):
             raise ValueError('Invalid public installation path')
         lock = json.loads((ROOT/'upstream.lock.json').read_text())
+        if layerling_commit is not None:
+            lock['commit'] = layerling_commit
         if len(lock['commit']) != 40 or any(c not in 'abcdef0123456789' for c in lock['commit']) or lock['path'] != 'apps/web/public/store.php':
             raise ValueError('Invalid upstream pin')
         git_env = {k:v for k,v in os.environ.items() if not k.startswith('GIT_')}
@@ -207,7 +209,10 @@ def package(output: Path, installed_private: str = INSTALLED_PRIVATE, layerling:
             raise ValueError('Upstream hash mismatch')
         (app/'upstream').mkdir(mode=0o700)
         (app/'upstream/store.php').write_bytes(upstream)
-        shutil.copyfile(ROOT/'upstream.lock.json',app/'upstream.lock.json')
+        if layerling_commit is None:
+            shutil.copyfile(ROOT/'upstream.lock.json',app/'upstream.lock.json')
+        else:
+            (app/'upstream.lock.json').write_text(json.dumps(lock, indent=2)+'\n')
         (app/'storage.json').write_text(storage_json, encoding='utf-8')
         for name in ['files.php','files.js','vorlagen.js','rechte.php']:
             shutil.copyfile(ROOT/'public'/name,public/name)

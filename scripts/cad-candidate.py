@@ -7,6 +7,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tarfile
@@ -132,11 +133,15 @@ PATCHES = {
 def digest(data):
     return hashlib.sha256(data).hexdigest()
 
-def pin():
+def pin(layerling_commit=None):
     upstream = json.loads((ROOT/'upstream.lock.json').read_text())
     adapter = json.loads((ROOT/'config/cad-adapter.lock.json').read_text())
     if upstream['commit'] != adapter['commit']:
         raise ValueError('CAD adapter has not been reviewed for this upstream commit')
+    if layerling_commit is not None:
+        if not re.fullmatch(r'[a-f0-9]{40}', layerling_commit):
+            raise ValueError('Layerling commit must be a full Git object ID')
+        upstream['commit'] = layerling_commit
     return upstream, adapter
 
 def modified(path, data):
@@ -147,18 +152,43 @@ def modified(path, data):
         text = text.replace(before, after)
     return text.encode()
 
-def prepare(layerling, output):
-    upstream, adapter = pin()
+def verify_preimages(archive, upstream, adapter):
+    for path, expected in adapter['preimages'].items():
+        if digest(archive.extractfile(path).read()) != expected:
+            raise ValueError('Unreviewed source: '+path)
+    if digest(archive.extractfile(upstream['path']).read()) != upstream['sha256']:
+        raise ValueError('Upstream store mismatch')
+
+
+def source_archive(layerling, commit):
+    env = {k:v for k,v in os.environ.items() if not k.startswith('GIT_')}
+    upstream_git = ['git', '-C', str(layerling)]
+    baseline = pin()[0]['commit']
+    if commit != baseline:
+        ancestry = subprocess.run([*upstream_git, 'merge-base', '--is-ancestor', baseline, commit], env=env)
+        if ancestry.returncode != 0:
+            raise ValueError('Layerling update must descend from the reviewed pin')
+
+        def dependency_lock(revision):
+            lock = json.loads(subprocess.check_output(
+                [*upstream_git, 'show', revision+':package-lock.json'], env=env))
+            # These two fields identify Layerling itself, rather than its dependencies.
+            lock.pop('version', None)
+            lock['packages'][''].pop('version', None)
+            return lock
+
+        if dependency_lock(commit) != dependency_lock(baseline):
+            raise ValueError('Layerling dependencies changed and require review')
+    return subprocess.check_output([*upstream_git, 'archive', '--format=tar', commit], env=env)
+
+
+def prepare(layerling, output, *, layerling_commit=None):
+    upstream, adapter = pin(layerling_commit)
     if output.exists() or output.is_symlink():
         raise ValueError('Output must not exist')
-    env = {k:v for k,v in os.environ.items() if not k.startswith('GIT_')}
-    archive = subprocess.check_output(['git', '-C', str(layerling), 'archive', '--format=tar', upstream['commit']], env=env)
+    archive = source_archive(layerling, upstream['commit'])
     with tarfile.open(fileobj=io.BytesIO(archive)) as source:
-        for path, expected in adapter['preimages'].items():
-            if digest(source.extractfile(path).read()) != expected:
-                raise ValueError('Unreviewed source: '+path)
-        if digest(source.extractfile(upstream['path']).read()) != upstream['sha256']:
-            raise ValueError('Upstream store mismatch')
+        verify_preimages(source, upstream, adapter)
         output.mkdir(mode=0o700)
         source.extractall(output, filter='data')
     transformed = {}
@@ -171,8 +201,8 @@ def prepare(layerling, output):
     (output/SOURCE_MARKER).write_text(json.dumps(metadata, indent=2)+'\n')
     return metadata
 
-def validate_source(source):
-    upstream, adapter = pin()
+def validate_source(source, *, layerling_commit=None):
+    upstream, _ = pin(layerling_commit)
     metadata = json.loads((source/SOURCE_MARKER).read_text())
     if metadata['commit'] != upstream['commit'] or metadata['kind'] != 'sso-layerling-cad-source-v1':
         raise ValueError('Wrong source identity')
@@ -183,16 +213,16 @@ def validate_source(source):
             raise ValueError('Adapted source changed')
     return metadata
 
-def verify_source_tree(source, layerling):
-    upstream, _ = pin()
-    env = {k:v for k,v in os.environ.items() if not k.startswith('GIT_')}
-    archive = subprocess.check_output(['git','-C',str(layerling),'archive','--format=tar',upstream['commit']], env=env)
+def verify_source_tree(source, layerling, *, layerling_commit=None):
+    upstream, adapter = pin(layerling_commit)
+    archive = source_archive(layerling, upstream['commit'])
     if digest(archive) != json.loads((source/SOURCE_MARKER).read_text())['archiveSha256']:
         raise ValueError('Source archive identity changed')
     for base in [source, source/'apps/web']:
         if any(p.name != '.env.example' for p in base.glob('.env*')):
             raise ValueError('Local environment files must not enter CAD builds')
     with tarfile.open(fileobj=io.BytesIO(archive)) as original:
+        verify_preimages(original, upstream, adapter)
         members = {item.name for item in original if item.isfile()}
         for directory, allowed in [(source, {'node_modules', SOURCE_MARKER, BUILD_MARKER}),
                 (source/'apps/web', {'.next', '.next-export', 'next-env.d.ts', 'tsconfig.tsbuildinfo'})]:
@@ -250,16 +280,16 @@ def adapt_occt_runtime(source):
     return {'version':runtime_version, 'sha256':digest(patched), 'adapterSha256':digest(replacement)}
 
 
-def build(source, layerling):
-    metadata = validate_source(source)
-    verify_source_tree(source, layerling)
+def build(source, layerling, *, layerling_commit=None):
+    metadata = validate_source(source, layerling_commit=layerling_commit)
+    verify_source_tree(source, layerling, layerling_commit=layerling_commit)
     env = {k:v for k,v in os.environ.items() if k in ['PATH','HOME','TMPDIR','LANG','LC_ALL','SHELL']}
     env.update({'NEXT_TELEMETRY_DISABLED':'1', 'LAYERLING_BUILD_CPUS':'2', 'NEXT_PUBLIC_SUPPORT_HINT':'off'})
     subprocess.run(['npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund'], cwd=source, env=env, check=True)
     occt = adapt_occt_runtime(source)
     subprocess.run(['npm', 'run', 'export'], cwd=source, env=env, check=True)
-    validate_source(source)
-    verify_source_tree(source, layerling)
+    validate_source(source, layerling_commit=layerling_commit)
+    verify_source_tree(source, layerling, layerling_commit=layerling_commit)
     export = source/'apps/web/.next-export'
     _, adapter = pin()
     manifold = adapter['manifoldRuntime']
@@ -290,11 +320,11 @@ def hashes(directory):
         if file.is_file(): result[str(file.relative_to(directory))] = digest(file.read_bytes())
     return result
 
-def package(source, layerling, output, installed_private=None, installed_public='/home/www/layerling', *, hosted_test=False, deployment_config_path=None):
+def package(source, layerling, output, installed_private=None, installed_public='/home/www/layerling', *, hosted_test=False, deployment_config_path=None, layerling_commit=None):
     if hosted_test and deployment_config_path is None:
         raise ValueError('Hosted CAD test packaging requires private deployment configuration')
-    metadata = validate_source(source)
-    verify_source_tree(source, layerling)
+    metadata = validate_source(source, layerling_commit=layerling_commit)
+    verify_source_tree(source, layerling, layerling_commit=layerling_commit)
     report = json.loads((source/BUILD_MARKER).read_text())
     export = source/'apps/web/.next-export'
     if report['source'] != metadata or report.get('supportHint') != 'off' or report['files'] != hashes(export):
@@ -303,7 +333,7 @@ def package(source, layerling, output, installed_private=None, installed_public=
     if (occt.get('adapterSha256') != digest(OCCT_ADAPTER.read_bytes())
         or report['files'].get(f"occt/{occt['version']}/occt-wasm.js") != occt['sha256']):
         raise ValueError('Export does not contain the current OCCT adapter')
-    upstream, adapter = pin()
+    upstream, adapter = pin(layerling_commit)
     if any(report['files'].get(name) != expected for name, expected in adapter['manifoldRuntime']['files'].items()):
         raise ValueError('Export does not contain the reviewed Manifold runtime')
     if digest((export/'store.php').read_bytes()) != upstream['sha256']:
@@ -311,7 +341,8 @@ def package(source, layerling, output, installed_private=None, installed_public=
     spec = importlib.util.spec_from_file_location('sso_package', ROOT/'scripts/package-sso-test.py')
     module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
     private = installed_private or module.INSTALLED_PRIVATE
-    module.package(output, private, layerling, installed_public, deployment_config_path=deployment_config_path)
+    module.package(output, private, layerling, installed_public,
+                   deployment_config_path=deployment_config_path, layerling_commit=layerling_commit)
     public = output/'public'
     bundle = output/'private/app/cad'; bundle.mkdir(mode=0o700)
     shutil.copyfile(export/'index.html', bundle/'index.html')
@@ -354,9 +385,19 @@ if __name__ == '__main__':
     p = commands.add_parser('build'); p.add_argument('--source', type=Path, required=True); p.add_argument('--layerling', type=Path, required=True)
     p = commands.add_parser('package'); p.add_argument('--source', type=Path, required=True); p.add_argument('--layerling', type=Path, required=True); p.add_argument('--output', type=Path, required=True); p.add_argument('--hosted-test', action='store_true')
     p.add_argument('--deployment-config', type=Path, help='Private deployment metadata, required with --hosted-test')
+    for command in commands.choices.values():
+        command.add_argument('--layerling-commit', help='Use a compatible descendant of the reviewed Layerling pin')
     args = parser.parse_args()
-    if args.action == 'prepare': prepare(args.layerling.resolve(), args.output.resolve()); print('Isolated CAD source prepared.')
-    elif args.action == 'build': build(args.source.resolve(), args.layerling.resolve()); print('CAD candidate build verified.')
-    else:
-        package(args.source.resolve(), args.layerling.resolve(), args.output.resolve(), hosted_test=args.hosted_test, deployment_config_path=args.deployment_config)
-        print('CAD test package prepared for explicit installation.' if args.hosted_test else 'Local CAD candidate packaged.')
+    try:
+        if args.action == 'prepare':
+            prepare(args.layerling.resolve(), args.output.resolve(), layerling_commit=args.layerling_commit)
+            print('Isolated CAD source prepared.')
+        elif args.action == 'build':
+            build(args.source.resolve(), args.layerling.resolve(), layerling_commit=args.layerling_commit)
+            print('CAD candidate build verified.')
+        else:
+            package(args.source.resolve(), args.layerling.resolve(), args.output.resolve(), hosted_test=args.hosted_test,
+                    deployment_config_path=args.deployment_config, layerling_commit=args.layerling_commit)
+            print('CAD test package prepared for explicit installation.' if args.hosted_test else 'Local CAD candidate packaged.')
+    except (KeyError, OSError, ValueError, subprocess.CalledProcessError) as error:
+        parser.exit(1, f'CAD {args.action} failed: {error}\n')

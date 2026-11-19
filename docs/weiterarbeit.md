@@ -16,6 +16,11 @@ Runtime-Prüfsummen stehen in `config/cad-adapter.lock.json`. Die vorhandenen Fi
 Upload- und SVG-Silhouettenkorrekturen sind enthalten. Eine Internetverbindung und
 getrennte Browserprofile sind für die erste Version vorgesehen.
 
+Der CAD-Kandidatenbau kann mit `--layerling-commit` einen kompatiblen Nachfolger des
+geprüften Pins verwenden. Paket und Buildbericht nennen den tatsächlich gebauten Commit.
+Änderungen an Adapter-Eingabedateien, Speicher-Backend oder npm-Abhängigkeiten erfordern
+eine gesonderte Prüfung und Aktualisierung des Pins. Die Runtime-Prüfsummen gelten weiter.
+
 Rechte werden aus validierten SSO-Claims und dem privaten Principal-Register abgeleitet.
 Es gibt keinen IDM-/LDAP-Hintergrundabgleich. Die letzte Schülerzuordnung gilt bis zur
 nächsten Anmeldung des Eigentümers. Der Rechtevertrag ist in den
