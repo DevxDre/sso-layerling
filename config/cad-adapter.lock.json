@@ -1,25 +1,25 @@
 {
-  "commit": "1c7f08467923789f5dd9263c49b786fc68de431b",
+  "commit": "c3fb723e06ecf81fbb1056e91cbecbfb3cfd0209",
   "manifoldRuntime": {
-    "version": "3.5.4",
+    "version": "3.5.5",
     "files": {
       "manifold.js": "ca3c8a88df63bb3083013d1eb7f700bf23216594f6e98a2566e34f55d7341ce8",
-      "manifold.wasm": "73e3b419ad31294f6b1cc478173944e50efc4a34bfdeeff0107bdfc12975f11c"
+      "manifold.wasm": "b172438703ef72dea983481a9a0328d43a9f09e224f6ab093e7bbc99f4372314"
     }
   },
   "occtRuntime": {
-    "version": "5.15.0",
-    "sha256": "1f9068dcef229e4c1e39126710012c92211d46e577520adc6e40716f862b6ceb"
+    "version": "5.17.1",
+    "sha256": "bee2d10b00b461bc4e8c693b68bdaaabfdc7f6c10efd08d4c47715732da45160"
   },
   "preimages": {
-    "apps/web/src/components/LayerlingEditor.tsx": "25a3a1ff3a2f39ee2dfb4189af58d8ce9ae1c89c15d2205fa7ad47b2bcd06f71",
-    "apps/web/src/app/layout.tsx": "cef9edd11732826b01edf11d8495b721478b1bc51c7e4404b9cc44e61dc39086",
-    "apps/web/src/lib/editorMeshCore.ts": "4e2228511d889d1979240964e96fd858e9b674391c39dfd8ced061896128a7c9",
+    "apps/web/src/components/LayerlingEditor.tsx": "a9ef4b0995aa6bb404f4a2121c9d918f5c4e351fa9c68e184311e5db105e1494",
+    "apps/web/src/app/layout.tsx": "c47dcbfdba86848007e7dae74ca455f9075b01669e00a0dc22304781ccd5842d",
+    "apps/web/src/lib/editorMeshCore.ts": "87f28ea712e294b80adafea5e3b2fa93cbc1a1ad3603d77d13ea481f7086e757",
     "apps/web/src/components/workplane/MyShapesSection.tsx": "07a42268d6e573717379f26a2a339f87a94b27e688e40d537aeaa860c7907a0d",
     "apps/web/src/lib/customShapesServer.ts": "918d57c45d9bb23587dd8008863c27cf02f69bd04bd61329ef4052b56ce6664e",
     "apps/web/src/lib/useAppUpdate.ts": "35929305a7b93b7ea53b73f0d224cebe940fdf77063755a2bd8c66117742b709",
     "apps/web/src/lib/useWhatsNew.ts": "d363fcf8e6dbbcc017bf270bb712768e4235342746675ec359ed073c4705c7f3",
     "apps/web/src/lib/offlineSupport.ts": "74a663e763d4d72fb3f7869e54600b49bd1e42b0a8af5ddd348f46ddc5722f89",
-    "apps/web/src/app/page.tsx": "29e58acffb16ac22dddfbd2a21f07839f9013fa765b6b9a3f6cedb4e18892983"
+    "apps/web/src/app/page.tsx": "72609736dd443f2e83978458ec9c51d9c331ca351b4151eef8cdeefead80b4db"
   }
 }

@@ -57,14 +57,13 @@ PATCHES = {
          'export const BUILD_HAS_SERVICE_WORKER = false; // SSO: online-only', 1),
     ],
     'apps/web/src/lib/editorMeshCore.ts': [
-        ('new URL("manifold.js", assetBase)', 'new URL("manifold.js?v=sso-3.5.4", assetBase)', 1),
-        ('new URL("manifold.wasm", assetBase)', 'new URL("manifold.wasm?v=sso-3.5.4", assetBase)', 1),
+        ('new URL("manifold.js", assetBase)', 'new URL("manifold.js?v=sso-3.5.5", assetBase)', 1),
+        ('new URL("manifold.wasm", assetBase)', 'new URL("manifold.wasm?v=sso-3.5.5", assetBase)', 1),
     ],
     'apps/web/src/app/page.tsx': [
-        ('import { DashboardWelcome, useWelcomeHidden } from "@/components/DashboardWelcome";\n'
-         'import { BrowserBackupNote, DesignTabs, type DesignTab } from "@/components/DesignTabs";\n'
-         'import { useOfflineAvailable } from "@/lib/offlineSupport";\n',
-         'import { BrowserBackupNote, DesignTabs, type DesignTab } from "@/components/DesignTabs";\n', 1),
+        ('import { DashboardWelcome, useWelcomeHidden } from "@/components/DashboardWelcome";\n',
+         '', 1),
+        ('import { useOfflineAvailable } from "@/lib/offlineSupport";\n', '', 1),
         ('  const offlineOk = useOfflineAvailable();\n', '', 1),
         ('  const whatsNew = useWhatsNew(LYL_CREATED_WITH_VERSION);',
          '  const whatsNew = useWhatsNew(LYL_CREATED_WITH_VERSION, false); // SSO: open only from the footer', 1),
@@ -88,7 +87,7 @@ PATCHES = {
          '      setDashboardNotice(error instanceof Error ? localizedError(error.message) : t("notice.saveSharedFailed"));\n      return; // SSO: do not open an unsaved server project.\n    }\n    setProjects((current) => [{ ...project, sharedProject: binding }, ...current]);', 1),
         ('    } else {\n      serverAnswer.defaults();',
          '    } else {\n      serverNewDesignsRef.current = "always";\n      setServerNewDesigns("always");\n      serverAnswer.defaults();', 1),
-        ('window.history.replaceState(null, "", "/");', 'window.history.replaceState(null, "", ssoCadUrl());', 4),
+        ('window.history.replaceState(null, "", "/");', 'window.history.replaceState(null, "", ssoCadUrl());', 5),
         ('const nextUrl = projectId ? `/?editor=1&project=${encodeURIComponent(projectId)}` : "/?editor=1";',
          'const nextUrl = ssoCadUrl(projectId);', 1),
         ('type SharedSearchResult = {\n  query: string;',
@@ -284,7 +283,8 @@ def build(source, layerling, *, layerling_commit=None):
     metadata = validate_source(source, layerling_commit=layerling_commit)
     verify_source_tree(source, layerling, layerling_commit=layerling_commit)
     env = {k:v for k,v in os.environ.items() if k in ['PATH','HOME','TMPDIR','LANG','LC_ALL','SHELL']}
-    env.update({'NEXT_TELEMETRY_DISABLED':'1', 'LAYERLING_BUILD_CPUS':'2', 'NEXT_PUBLIC_SUPPORT_HINT':'off'})
+    env.update({'NEXT_TELEMETRY_DISABLED':'1', 'LAYERLING_BUILD_CPUS':'2',
+        'NEXT_PUBLIC_SUPPORT_HINT':'off', 'NEXT_PUBLIC_ANNOUNCEMENTS':'off'})
     subprocess.run(['npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund'], cwd=source, env=env, check=True)
     occt = adapt_occt_runtime(source)
     subprocess.run(['npm', 'run', 'export'], cwd=source, env=env, check=True)

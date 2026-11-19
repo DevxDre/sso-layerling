@@ -1,6 +1,6 @@
 # Entwicklungsstand
 
-Stand: 17.11.2026. Einstieg über `AGENTS.md`, `README.md` und `CONTRIBUTING.md`.
+Stand: 19.11.2026. Einstieg über `AGENTS.md`, `README.md` und `CONTRIBUTING.md`.
 Begriffe: [Glossar](../GLOSSARY.md). Geplante Entwicklung: [Roadmap](roadmap.md).
 
 ## Technischer Stand
@@ -20,6 +20,11 @@ Der CAD-Kandidatenbau kann mit `--layerling-commit` einen kompatiblen Nachfolger
 geprüften Pins verwenden. Paket und Buildbericht nennen den tatsächlich gebauten Commit.
 Änderungen an Adapter-Eingabedateien, Speicher-Backend oder npm-Abhängigkeiten erfordern
 eine gesonderte Prüfung und Aktualisierung des Pins. Die Runtime-Prüfsummen gelten weiter.
+
+Der Pin steht auf Layerling 1.165.2 (`c3fb723e0`) mit Manifold 3.5.5 und OCCT 5.17.1.
+Der CAD-Adapter hält auch beim neuen Rücksprung nach einem Ladefehler den ausgewählten
+Projektbereich unter `/cad.php`. Der Schul-Build deaktiviert die neuen Live-Ankündigungen
+von GitHub. Der OCCT-Adapter für die Content Security Policy wird weiterhin angewendet.
 
 Rechte werden aus validierten SSO-Claims und dem privaten Principal-Register abgeleitet.
 Es gibt keinen IDM-/LDAP-Hintergrundabgleich. Die letzte Schülerzuordnung gilt bis zur
@@ -66,7 +71,13 @@ beschreibt die Priorität der Regeln, Vorlagengruppen und MCP-Freigaben.
 
 ## Prüfstand und offene Punkte
 
-Der übernommene Quellstand wurde mit OIDC-, Speicher-, Paketierungs- und Installerprüfungen
+Für Layerling 1.165.2 bestanden unter PHP 8.4.19 die CAD-Build-, Installer- und
+Deployment-Konfigurationstests sowie beide CAD-HTTP-/Chromium-Läufe für IServ
+und das synthetische alternative OIDC-Profil.
+Der Browserlauf prüfte unter anderem Wiederöffnen vom Server, getrennte Vorlagenkopien,
+MCP sowie STEP- und SVG-Downloads unter der Content Security Policy.
+
+Ein früherer Quellstand wurde mit OIDC-, Speicher-, Paketierungs- und Installerprüfungen
 sowie einem neu gebauten CAD-Export geprüft. Zuletzt bestanden sieben CAD-Build-/Paket-
 und vier CAD-Installerprüfungen. Im 25er CAD-HTTP-/Browserlauf bestanden 24 Fälle;
 ein sporadischer Konflikt beim Kopieren einer Vorlage für das zweite Schülerkonto trat auf.

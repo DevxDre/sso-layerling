@@ -235,14 +235,14 @@ try{
   await waitFor("document.querySelector('.dashboard-legal')!==null",'Layerling footer');
   stage='school dashboard after a release';
   await evaluate("localStorage.setItem('layerling.lastSeenVersion', '1.142.0')");
-  await navigate('/cad.php?mode=full');
+  await navigate('/cad.php?mode=full&announcementAt=2026-11-19');
   const whatsNewLink = "Array.from(document.querySelectorAll('.dashboard-legal a')).find(a => /^(What is new|Was ist neu)\\?$/.test(a.textContent.trim()))";
   await waitFor(whatsNewLink + " !== undefined", 'manual release notes link');
   assert.equal(await evaluate("document.querySelector('.dashboard-welcome-frame, .dashboard-legal a[href=\"#welcome\"], .whats-new') === null"), true);
   assert.equal(await evaluate("document.querySelector('link[rel=manifest]') === null"), true);
   assert.deepEqual(manifestRequests, []);
   await evaluate(whatsNewLink + ".click()");
-  await waitFor("document.querySelector('.whats-new') !== null", 'release notes open on request');
+  await waitFor("document.querySelector('.whats-new:not(.announcement)') !== null", 'release notes open on request');
   await evaluate("document.querySelector('.whats-new-close').click()");
   await waitFor("document.querySelector('.whats-new') === null", 'release notes closed');
   assert.equal(await evaluate("document.querySelector('.support-nudge, .dashboard-legal-sponsor')===null"),true,'upstream support prompts disabled');
@@ -450,6 +450,7 @@ try{
   await waitFor("document.querySelector('.shared-project-card .project-menu-trigger')!==null",'admin project menu');
   await evaluate("document.querySelector('.shared-project-card .project-menu-trigger').click()");
   await waitFor("document.querySelector('.shared-project-card .project-card-menu .delete')?.getClientRects().length>0",'admin delete visible');
+  assert.equal(await evaluate("[...document.querySelectorAll('.shared-project-card .project-card-menu button')].some(button => /Takes the design off the server|Holt den Entwurf vom Server/.test(button.title))"),false,'server projects cannot be moved into browser-only storage');
   // Copy the real project before exercising admin deletion so the supervised original remains verifiable.
   const copyQuery = remove + '&copyTo=admin-test-copy.lyl';
   const latest = await evaluate(folderListing+"[0]");
