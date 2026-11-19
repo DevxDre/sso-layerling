@@ -20,10 +20,11 @@ sperren keine Kontenrechte mehr. Entferne die Datei oder setze
 
 Der Wrapper prüft bei jedem Zugriff die Sitzung und die MCP-Freigabe.
 Die Kopplung ist im eigenen Projektbereich verfügbar. Öffne dort einen
-Entwurf und wähle **SSO-Menü → MCP-Token erstellen**. Der Token gilt für genau
-diese Browsersitzung bis zur Abmeldung oder bis zum Sitzungsablauf. Die
-Sitzung endet nach 70 Minuten Inaktivität oder spätestens 140 Minuten nach
-der Anmeldung. Ein neu ausgestellter Token ersetzt den bisherigen.
+Entwurf, klicke in der CAD-Fußzeile auf deinen Namen und wähle **MCP-Token
+erstellen**. Der Token gilt für genau diese Browsersitzung bis zur Abmeldung oder
+bis zum Sitzungsablauf. Die Sitzung endet nach 70 Minuten Inaktivität oder
+spätestens 140 Minuten nach der Anmeldung. Ein neu ausgestellter Token ersetzt
+den bisherigen.
 
 MCP verarbeitet Nachrichten bis 4 MiB und höchstens einen laufenden Befehl je
 Sitzung. Der normale Speicherweg legt Änderungen im ausgewählten eigenen

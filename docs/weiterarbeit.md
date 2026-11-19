@@ -38,6 +38,10 @@ Die Kontoseite und der manuelle Anmeldeeinstieg verwenden dieselbe Gestaltung.
 Im Konto stehen Name, Account und Klasse vor den aufklappbaren Angaben zu Rollen
 und Gruppen. Das Stylesheet ist auch im reinen SSO-Testpaket enthalten.
 
+Das Kontomenü in der CAD-Fußzeile öffnet sich über den Namen des ausgewählten
+Kontos. Bei Konten mit der konfigurierten Schülerrolle folgen vorhandene Klassen
+in Klammern. Ein fremder Projektbereich trägt den Zusatz „Fremdes Konto“.
+
 ## Private Daten und bestehende Installationen
 
 Reale Zugangsdaten, Benutzer-/Gruppenkennungen, Betriebsnotizen und Installationsprotokolle
@@ -50,7 +54,8 @@ Die [Migrationsbeschreibung](installation-und-migration.md) erläutert die Grenz
 Umbenennung und der neuen Cookie-/Browser-Speichernamensräume.
 
 Die Rechteseite unter `/rechte.php` verwaltet Regeln über die in der privaten `.env`
-gesetzte OIDC-Admin-Rolle. Sie ist über das SSO-Menü und die Kontoseite erreichbar.
+gesetzte OIDC-Admin-Rolle. Sie ist über das Kontomenü in der CAD-Fußzeile und die
+Kontoseite erreichbar.
 Der [Rechteleitfaden](sso-berechtigungsmodell.md#rechte-über-die-oberfläche-verwalten)
 beschreibt die Priorität der Regeln, Vorlagengruppen und MCP-Freigaben.
 

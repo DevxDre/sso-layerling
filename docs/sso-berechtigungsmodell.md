@@ -98,8 +98,8 @@ Arbeitsauftrag. Ihre Ausführung auf dem IServ ist nicht erforderlich.
 Setze in der privaten `.env` beispielsweise `SSO_LAYERLING_ADMIN_ROLE=ROLE_ADMIN`.
 Der Wert muss mit der Rollen-ID aus dem normalisierten OIDC-Rollenclaim
 übereinstimmen. Mit leerem Wert ist der Zugriff auf die Rechteseite gesperrt.
-Administratoren erreichen die Seite über das SSO-Menü, die Kontoseite oder
-direkt unter `/rechte.php`.
+Administratoren erreichen die Seite über das Kontomenü in der CAD-Fußzeile, die
+Kontoseite oder direkt unter `/rechte.php`.
 
 - Wähle als Akteur einen Gruppenaccount (`groups:<Accountname>`) oder eine Rolle
   (`role:<ID>`). Die Vorschläge zeigen Gruppen mit einem eindeutigen Accountnamen.

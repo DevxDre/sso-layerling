@@ -34,7 +34,8 @@
   function renderAccountPicker(panel, toggle) {
     const nameKey = name => name.trim().normalize('NFC').toLocaleLowerCase('de');
     const name = record => record.name ?? record.label;
-    const title = record => name(record) + (record.classes.length ? ' (' + record.classes.join(', ') + ')' : '');
+    const title = record => name(record) + (record.hasStudentRole === true && record.classes.length
+      ? ' (' + record.classes.join(', ') + ')' : '');
     const countNames = records => {
       const counts = new Map();
       for (const record of records) {
@@ -51,7 +52,7 @@
     active.textContent = 'Aktives Konto: ' + current;
     panel.append(active);
     const foreign = actor !== owner;
-    toggle.textContent += foreign ? ' · Fremdes Konto: ' + current : ' · ' + current;
+    toggle.textContent = foreign ? 'Fremdes Konto: ' + current : current;
     toggle.title = toggle.textContent;
     toggle.classList.toggle('sso-cad-foreign-account', foreign);
     if (owners.length < 2) return;
@@ -127,7 +128,6 @@
     footer.id = 'sso-cad-footer';
     const menu = document.createElement('details');
     const toggle = document.createElement('summary');
-    toggle.textContent = 'SSO-Menü';
     const panel = document.createElement('nav');
     panel.id = 'sso-cad-nav';
     panel.setAttribute('aria-label', 'SSO-Kontonavigation');

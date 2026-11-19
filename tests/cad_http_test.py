@@ -198,6 +198,8 @@ class CadHTTPTest(base.IntegratedStorageTest):
         owners = self.json(self.raw(maker, path='/owners.php?cad=1'))['owners']
         entry = next(item for item in owners if item['userId'] == student.owner)
         self.assertEqual(entry['classes'], ['5a', '6b'])
+        self.assertIs(entry['hasStudentRole'], True)
+        self.assertIs(next(item for item in owners if item['isSelf'])['hasStudentRole'], False)
         self.assertNotIn('schueler', json.dumps(owners))
         self.assertEqual(len(self.json(self.raw(other, path='/owners.php?cad=1'))['owners']), 1)
         # Existing records and a later login without a class both render without errors.
@@ -278,12 +280,14 @@ class CadHTTPTest(base.IntegratedStorageTest):
 
     @unittest.skipUnless(OPTIONS.candidate,'Pass the verified real candidate to exercise Chromium')
     def test_19_browser_real_editor(self):
-        a=self.login(groups=['cad-class'], group_acts={'cad-class': self.class_prefix+'5a'}, display_name='Änne Muster')
-        b=self.login(base.U2, groups=['cad-class'], group_acts={'cad-class': self.class_prefix+'5a'}, display_name='Änne Muster')
+        classes = {'cad-class': self.class_prefix+'5a', 'second-class': self.class_prefix+'7c'}
+        a=self.login(groups=list(classes), group_acts=classes, display_name='Änne Muster')
+        b=self.login(base.U2, groups=list(classes), group_acts=classes, display_name='Änne Muster')
         unnamed=self.login('55555555-5555-5555-5555-555555555555', groups=['other-class'],
                            group_acts={'other-class': self.class_prefix+'6b'}, display_name=None)
         teacher=self.login('66666666-6666-6666-6666-666666666666', ['ROLE_TEACHER'], ['cad-class'], display_name='Änne Lehrkraft')
-        maker = self.login(base.UM, ['ROLE_TEACHER'], [base.MAKER])
+        maker = self.login(base.UM, ['ROLE_TEACHER'], [base.MAKER, 'cad-class'],
+                           group_acts={'cad-class': classes['cad-class']}, display_name='Klara Betreuung')
         account_name = 'KonstruktionswerkstattSchuljahresabschlussprojekt' * 3
         account_id = 'arbeitsgruppenbenutzerkennung' * 5
         admin = self.login(base.UA, ['ROLE_TEACHER', self.rights_admin_role], [base.ADMIN],

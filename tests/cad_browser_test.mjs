@@ -248,7 +248,8 @@ try{
   assert.equal(await evaluate("document.querySelector('.support-nudge, .dashboard-legal-sponsor')===null"),true,'upstream support prompts disabled');
   assert.equal(await evaluate("document.querySelector('#sso-cad-footer > details').open"),false,'SSO menu starts collapsed');
   const menuSummary = "document.querySelector('#sso-cad-footer > details > summary')";
-  assert.equal(await evaluate(menuSummary+".textContent"),'SSO-Menü · Änne Muster (5a)');
+  const studentLabel = 'Änne Muster (5a, 7c)';
+  assert.equal(await evaluate(menuSummary+".textContent"),studentLabel);
   assert.equal(await evaluate(menuSummary+".classList.contains('sso-cad-foreign-account')"),false);
   assert.equal(await evaluate("document.querySelector('.dashboard-shell').getBoundingClientRect().bottom <= document.getElementById('sso-cad-footer').getBoundingClientRect().top"),true,'closed footer does not cover the dashboard');
   await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:false});
@@ -366,6 +367,7 @@ try{
   stage='maker owner selection';
   await cookies(fixture.makerCookies);
   await navigate('/cad.php');
+  assert.equal(await evaluate(menuSummary+".textContent"),'Klara Betreuung');
   await evaluate("localStorage.setItem('sso-test','maker-own')");
   await focusDesignSearch();
   await enterSearch('kein solcher Entwurf');
@@ -373,6 +375,7 @@ try{
   await openAccounts();
   const ownerOptions = "Array.from(document.querySelectorAll('#sso-cad-accounts li:not([hidden]) a'), link=>[new URL(link.href).searchParams.get('owner'),link.textContent])";
   assert.deepEqual((await evaluate(ownerOptions)).map(([id])=>id).sort(), [null,fixture.owner,fixture.otherOwner].sort());
+  assert.equal((await evaluate(ownerOptions)).find(([id])=>id===null)[1],'Klara Betreuung');
   await enterSearch('6B');
   assert.deepEqual(await evaluate(ownerOptions), [[fixture.unnamedOwner,'Nutzer '+fixture.unnamedOwner.slice(0,8)+' (6b)']]);
   await enterSearch('kein solcher Name');
@@ -380,15 +383,16 @@ try{
   assert.equal(await evaluate("document.querySelector('#sso-cad-accounts [role=status]').hidden"),false);
   await enterSearch('ÄNNE');
   assert.deepEqual((await evaluate(ownerOptions)).sort(), [
-    [fixture.owner,'Änne Muster (5a) · '+fixture.owner.slice(0,8)],
-    [fixture.otherOwner,'Änne Muster (5a) · '+fixture.otherOwner.slice(0,8)]
+    [fixture.owner,studentLabel+' · '+fixture.owner.slice(0,8)],
+    [fixture.otherOwner,studentLabel+' · '+fixture.otherOwner.slice(0,8)]
   ].sort(),'only authorized matching owners, with distinct labels for identical names');
   assert.equal(await evaluate("Array.from(document.querySelectorAll('#sso-cad-accounts a')).some(link=>link.href.includes("+JSON.stringify(fixture.teacherOwner)+"))"),false);
   assert.equal(await evaluate("document.querySelector('#sso-cad-nav a[href^=\"/konto\"], #sso-cad-nav a[href^=\"/files\"]')===null"),true);
   await evaluate("document.querySelector('#sso-cad-accounts a[href=\"/cad.php?owner="+fixture.owner+"\"]').click()");
   await waitFor("new URLSearchParams(location.search).get('owner')==="+JSON.stringify(fixture.owner)+" && document.documentElement.dataset.ssoCad==='ready'",'selected owner navigation');
-  assert.equal(await evaluate("document.querySelector('#sso-cad-nav strong').textContent"),'Aktives Konto: Änne Muster (5a) · '+fixture.owner.slice(0,8));
-  assert.equal(await evaluate(menuSummary+".textContent"),'SSO-Menü · Fremdes Konto: Änne Muster (5a) · '+fixture.owner.slice(0,8));
+  const selectedLabel = studentLabel+' · '+fixture.owner.slice(0,8);
+  assert.equal(await evaluate("document.querySelector('#sso-cad-nav strong').textContent"),'Aktives Konto: '+selectedLabel);
+  assert.equal(await evaluate(menuSummary+".textContent"),'Fremdes Konto: '+selectedLabel);
   assert.equal(await evaluate(menuSummary+".classList.contains('sso-cad-foreign-account')"),true);
   assert.equal(await evaluate("document.documentElement.dataset.ssoCanDelete"),'false');
   assert.equal(await evaluate("localStorage.getItem('sso-test')"),null,'foreign cache separated from both users');

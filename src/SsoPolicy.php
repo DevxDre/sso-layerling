@@ -175,8 +175,11 @@ final class SsoPolicy
     }
     private function ownerRecord(string $actor, string $id): ?array
     {
-        if (!preg_match('/^[a-f0-9]{32}$/D', $id)
-            || $this->record($id) === null || !$this->allowed($actor, $id, 'read')) {
+        if (!preg_match('/^[a-f0-9]{32}$/D', $id)) {
+            return null;
+        }
+        $record = $this->record($id);
+        if ($record === null || !$this->allowed($actor, $id, 'read')) {
             return null;
         }
         $name = $this->principals[$id]['name'] ?? null;
@@ -188,8 +191,10 @@ final class SsoPolicy
         $classes = array_values(array_filter($classes, static fn($value) =>
             is_string($value) && $value !== '' && strlen($value) <= 200 && !preg_match('/[\x00-\x1f\x7f]/', $value)));
         $label = $name ?? 'Nutzer ' . substr($id, 0, 8);
+        $studentRole = $this->config['studentRoleId'] ?? null;
         return ['userId' => $id, 'label' => $actor === $id ? 'Mein Speicher' : $label,
             'name' => $name, 'classes' => $classes,
+            'hasStudentRole' => $studentRole !== null && in_array($studentRole, $record['roles'], true),
             'isSelf' => $actor === $id, 'canWrite' => $this->allowed($actor, $id, 'write'), 'canDelete' => $this->allowed($actor, $id, 'delete')];
     }
 
