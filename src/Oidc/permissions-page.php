@@ -23,7 +23,7 @@ $fieldMessages = [
     'owner' => 'Gib eine gültige Gruppe oder Rolle für die Zielkonten ein.',
     'operation' => 'Wähle ein Recht aus der Liste.',
     'effect' => 'Wähle „Erlauben“ oder „Verbieten“.',
-    'pattern' => 'Verwende bis zu 128 Zeichen aus A–Z, a–z, 0–9 sowie Punkt, Doppelpunkt, Unterstrich oder Bindestrich. Ein ^ ist zusätzlich am Ende erlaubt.',
+    'pattern' => 'Gib ein gültiges Gruppenmuster ein, zum Beispiel makerspace oder /^makerspace$/i.',
 ];
 $formError = 'Die Änderung konnte nicht gespeichert werden. Prüfe den aktuellen Stand und versuche es erneut.';
 $submittedValue = static function (string $name, int $maxLength) use ($submitted, $error): string {
@@ -179,15 +179,22 @@ $backLabel = $hasCad ? 'Zurück zum Konto' : 'Zur Anmeldung';
 
   <section class="sso-card" aria-labelledby="patterns-heading">
     <h2 id="patterns-heading">Gruppenfilter für die Vorlagenverteilung</h2>
-    <p><code>makerspace^</code> findet eigene Gruppen, deren Gruppenaccount mit <code>makerspace</code> beginnt. Ohne <code>^</code> muss der Gruppenaccount genau übereinstimmen. Liefert der Anmeldeserver keinen Gruppenaccount, gilt die Gruppen-ID. Eine leere Filterliste zeigt alle eigenen Gruppen.</p>
+    <p id="group-pattern-help">Schreibe reguläre Ausdrücke zwischen Schrägstriche. Darin steht <code>^</code> für den
+      Anfang, <code>$</code> für das Ende und <code>|</code> für ODER. <code>/^makerspace$/</code> findet genau
+      <code>makerspace</code>, <code>/^makerspace\..+/</code> findet etwa <code>makerspace.cad</code> und
+      <code>/\.technik$/</code> findet etwa <code>kurs.technik</code>.</p>
+    <p>Bei einfachen Mustern passt <code>makerspace</code> genau. Mit einem <code>^</code> am Ende passt
+      <code>makerspace^</code> auf alle Gruppenaccounts, die mit <code>makerspace</code> beginnen.</p>
+    <p>Für die Vorlagenverteilung genügt ein passendes Muster. Der Filter prüft den Gruppenaccount, ersatzweise
+      die Gruppen-ID. Ohne Muster stehen alle eigenen Gruppen zur Auswahl.</p>
     <?php $patternInvalid = $action === 'add-pattern' && $error === 'pattern'; ?>
     <form method="post" action="/rechte.php">
       <input type="hidden" name="csrf" value="<?= $escape($csrf) ?>">
       <div class="sso-form-row">
         <label class="sso-field">Gruppenmuster
-          <input id="group-pattern" name="pattern" maxlength="129" placeholder="makerspace^" required
-            value="<?= $escape($action === 'add-pattern' ? $submittedValue('pattern', 129) : '') ?>"
-            <?= $patternInvalid ? $invalidField('group-pattern') : '' ?>>
+          <input id="group-pattern" name="pattern" maxlength="<?= PermissionRules::PATTERN_MAX_LENGTH ?>" placeholder="/^makerspace$/" required
+            value="<?= $escape($action === 'add-pattern' ? $submittedValue('pattern', PermissionRules::PATTERN_MAX_LENGTH) : '') ?>"
+            <?= $patternInvalid ? $invalidField('group-pattern') : 'aria-describedby="group-pattern-help"' ?>>
         </label>
         <button class="sso-button sso-button-primary" name="action" value="add-pattern">Hinzufügen</button>
       </div>

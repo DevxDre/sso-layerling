@@ -115,15 +115,35 @@ Kontoseite oder direkt unter `/rechte.php`.
   erfordern ebenfalls eine passende Freigabe in der Rechteverwaltung.
   MCP setzt zusätzlich eine aktivierte Brücke mit gültiger privater MCP-Konfiguration voraus.
   Bestehende Vorlagen bleiben für die vorgesehenen Empfänger verfügbar.
-- Gruppenmuster filtern die beim Verteilen auswählbaren eigenen Gruppen.
-  `makerspace^` sucht nach Gruppenaccounts mit dem Präfix `makerspace`.
-  Ohne abschließendes `^` gilt exakte Übereinstimmung. Liefert der Anmeldeserver
-  keinen Gruppenaccount, wird die Gruppen-ID verwendet. Ohne Muster stehen alle
-  eigenen Gruppen zur Auswahl. Gleiche Prüfung beim Speichern der Verteilung.
+- Gruppenmuster filtern die beim Verteilen auswählbaren eigenen Gruppen. Jeder
+  Eintrag ist eine Alternative. Liefert der Anmeldeserver keinen Gruppenaccount,
+  wird die Gruppen-ID verwendet. Ohne Muster stehen alle eigenen Gruppen zur
+  Auswahl. Dieselbe Prüfung gilt beim Speichern der Verteilung.
+- Reguläre Ausdrücke verwenden PCRE-Syntax mit Schrägstrichen und optionalen
+  Modifikatoren wie `i` für einen Vergleich ohne Beachtung der Groß- und
+  Kleinschreibung. Sie können bis zu 512 Zeichen lang sein. Fehler bei der
+  Auswertung eines Ausdrucks zählen für diesen Ausdruck als fehlender Treffer.
+- Einfache Einträge wie `makerspace` passen weiterhin genau.
+  Ein abschließendes `^` wie in `makerspace^` kennzeichnet weiterhin ein Präfix.
 - Der Server prüft Regeln bei jeder geschützten Anfrage. Geänderte OIDC-Rollen
   und Gruppenmitgliedschaften werden bei der nächsten erfolgreichen Anmeldung
   des jeweiligen Kontos übernommen. Bei Bestandskonten stehen die Gruppenaccounts
   nach dem ersten Login mit dem aktualisierten Wrapper zur Verfügung.
 
+| Gewünschter Treffer | Regulärer Ausdruck |
+| --- | --- |
+| Genau `makerspace` | `/^makerspace$/` |
+| `makerspace.` am Anfang mit mindestens einem weiteren Zeichen | `/^makerspace\..+/` |
+| `.technik` am Ende | `/\.technik$/` |
+| `technik` an Wortgrenzen, auch in `ag-technik` | `/\btechnik\b/u` |
+| `technik` als durch Punkte abgetrennter Namensbestandteil | `/(?:^\|\.)technik(?:\.\|$)/` |
+
+Für Gruppenaccounts mit Punkten als Trennzeichen genügt dieser Eintrag.
+`/^makerspace(?:\..+)?$|(?:^|\.)technik(?:\.|$)/`.
+Ein wörtlicher Punkt wird als `\.` geschrieben. Der letzte Teil des kombinierten
+Ausdrucks erfasst `.technik` bereits am Ende.
+
 Die Änderungen werden in `private/permissions.json` außerhalb des Webroots
 gespeichert. Die Datei gehört zu den privaten Laufzeitdaten der Installation.
+Vor einer Rücksetzung auf eine Version ohne Regex-Unterstützung die regulären
+Ausdrücke in der Rechteverwaltung durch passende einfache Einträge ersetzen.

@@ -295,6 +295,62 @@ class IntegratedStorageTest(unittest.TestCase):
         self.json(pair(), 403)
         self.json(self.raw(sso.Client(self), path=mcp, headers=bearer), 403)
 
+    def test_regex_group_filters_apply_to_listing_and_publication(self):
+        rights_path = '/rechte.php'
+        templates_path = '/vorlagen.php'
+        operator = self.login(UA, [self.rights_admin_role])
+        accounts = {
+            'maker': 'makerspace', 'maker-cad': 'MAKERSPACE.cad', 'maker-empty': 'makerspace.',
+            'maker-similar': 'makerspace2', 'tech-last': 'kurs.technik', 'tech-middle': 'ag.technik.cad',
+            'tech-exact': 'technik', 'tech-joined': 'biotechnik', 'legacy-prefix': 'legacy-workshop',
+            'legacy-exact': 'archive.exact', 'legacy-similar': 'archiveXexact', 'limit-group': 'limit',
+        }
+        instructor = self.login(UM, ['ROLE_TEACHER'], [*accounts, 'fallback-id'], group_acts=accounts)
+        learner = self.login(groups=['tech-middle', 'foreign'], group_acts={'foreign': 'technik'})
+        self.seed_permissions(self.publisher_rule())
+
+        def change_pattern(pattern, action='add-pattern'):
+            return operator.request(rights_path, 'POST', {'csrf': operator.csrf, 'action': action, 'pattern': pattern})
+
+        combined = r'/^makerspace(?:\..+)?$|(?:^|\.)technik(?:\.|$)/i'
+        for pattern in [combined, '/^fallback-id$/', 'legacy^', 'archive.exact', '/(*LIMIT_MATCH=1)^limit$/']:
+            response = change_pattern(pattern)
+            self.assertEqual((response[0], response[1].get('location')), (303, rights_path + '?saved=1'), response[2][:300])
+        self.assertIn(('<code class="sso-wrap">' + combined + '</code>').encode(), operator.request(rights_path)[2])
+
+        saved = (self.private/'permissions.json').read_bytes()
+        for pattern in ['/[/', '/^makerspace$', '/technik/Q', '/' + 'a' * 511 + '/']:
+            with self.subTest(invalid=pattern):
+                response = change_pattern(pattern)
+                self.assertEqual(response[0], 400)
+                self.assertIn(b'id="group-pattern-error" role="alert"', response[2])
+                self.assertEqual((self.private/'permissions.json').read_bytes(), saved)
+
+        def shown_groups():
+            response = self.raw(instructor, path=templates_path)
+            self.assertEqual(response[0], 200, response[2][:300])
+            return {group.decode() for group in re.findall(rb'name="groups\[\]" value="([^"]+)"', response[2])}
+
+        self.assertEqual(shown_groups(), {
+            'maker', 'maker-cad', 'tech-last', 'tech-middle', 'tech-exact',
+            'fallback-id', 'legacy-prefix', 'legacy-exact',
+        })
+        for forbidden in ['maker-empty', 'maker-similar', 'tech-joined', 'foreign', 'limit-group']:
+            with self.subTest(forbidden=forbidden):
+                self.json(self.publish_template(instructor, ['tech-middle', forbidden]), 403)
+
+        content = project('distributed by regex')
+        self.assertEqual(self.publish_template(instructor, ['tech-middle'], content)[0], 201)
+        learner_page = self.raw(learner, path=templates_path)
+        self.assertEqual(learner_page[0], 200)
+        template_id = re.search(rb'data-copy-template="([a-f0-9]{32})"', learner_page[2])[1].decode()
+        download = self.raw(learner, path=templates_path + '?id=' + template_id)
+        self.assertEqual((download[0], download[2]), (200, content))
+
+        self.assertEqual(change_pattern(combined, 'remove-pattern')[0], 303)
+        self.assertEqual(shown_groups(), {'fallback-id', 'legacy-prefix', 'legacy-exact'})
+        self.json(self.publish_template(instructor, ['tech-middle']), 403)
+
     def test_template_permissions_follow_latest_iserv_login(self):
         path = '/vorlagen.php'
         self.json(self.raw(sso.Client(self), path=path), 401)

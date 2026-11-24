@@ -13,6 +13,7 @@ final class PermissionRules
         'publish' => 'Vorlagen verteilen',
         'mcp' => 'MCP-Token erstellen',
     ];
+    public const PATTERN_MAX_LENGTH = 512;
     private const LIMIT = 131072;
     private array $rules = [];
     private array $patterns = [];
@@ -78,7 +79,28 @@ final class PermissionRules
 
     private static function validPattern(mixed $value): bool
     {
-        return is_string($value) && preg_match('/^[A-Za-z0-9_.:-]{1,128}\^?$/D', $value) === 1;
+        if (!is_string($value)) {
+            return false;
+        }
+        if (!str_starts_with($value, '/')) {
+            return preg_match('/^[A-Za-z0-9_.:-]{1,128}\^?$/D', $value) === 1;
+        }
+        return mb_check_encoding($value, 'UTF-8') && mb_strlen($value, 'UTF-8') <= self::PATTERN_MAX_LENGTH
+            && strpbrk($value, "\0\r\n") === false && @preg_match(self::boundedRegex($value), '') !== false;
+    }
+
+    private static function boundedRegex(string $pattern): string
+    {
+        // Disable JIT so PCRE also applies the depth limit.
+        return '/(*NO_JIT)(*LIMIT_MATCH=10000)(*LIMIT_DEPTH=500)' . substr($pattern, 1);
+    }
+
+    private static function matchesGroupPattern(string $account, string $pattern): bool
+    {
+        if (str_starts_with($pattern, '/')) {
+            return @preg_match(self::boundedRegex($pattern), $account) === 1;
+        }
+        return str_ends_with($pattern, '^') ? str_starts_with($account, substr($pattern, 0, -1)) : $account === $pattern;
     }
 
     private static function key(array $rule): string
@@ -168,7 +190,7 @@ final class PermissionRules
             $account = $record['groupAccounts'][$id] ?? null;
             $account = is_string($account) ? $account : $id;
             foreach ($this->patterns as $pattern) {
-                if (str_ends_with($pattern, '^') ? str_starts_with($account, substr($pattern, 0, -1)) : $account === $pattern) {
+                if (self::matchesGroupPattern($account, $pattern)) {
                     return true;
                 }
             }

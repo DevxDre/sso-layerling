@@ -68,6 +68,9 @@ gesetzte OIDC-Admin-Rolle. Sie ist über das Kontomenü in der CAD-Fußzeile und
 Kontoseite erreichbar.
 Der [Rechteleitfaden](sso-berechtigungsmodell.md#rechte-über-die-oberfläche-verwalten)
 beschreibt die Priorität der Regeln, Vorlagengruppen und MCP-Freigaben.
+Der Gruppenfilter für die Vorlagenverteilung unterstützt zusätzlich reguläre Ausdrücke
+in PCRE-Syntax zwischen Schrägstrichen. Die vorhandenen Exakt- und Präfixmuster gelten
+weiter. Anzeige und serverseitige Verteilung prüfen dieselben Muster.
 
 ## Prüfstand und offene Punkte
 
