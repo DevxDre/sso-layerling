@@ -580,6 +580,17 @@ class IntegratedStorageTest(unittest.TestCase):
         for path in ['/store.php','/session.php','/owners.php']:self.json(self.raw(a,path=path),401)
         self.assertEqual((self.private/'sessions'/('sess_'+sid)).read_bytes(),b'')
         self.assertTrue((self.private/'projects'/a.owner/'same.lyl').is_file())
+    def test_08b_late_response_from_old_account_keeps_new_login_cookie(self):
+        a=self.login(U1);b=self.login(U2)
+        browser=sso.Client(self);browser.cookies=dict(b.cookies)
+        # A request still in flight from the old tab carries the old cookie. Its late response must not
+        # switch the browser back to the old account after another login in the same browser.
+        old='; '.join(k+'='+v for k,v in a.cookies.items())
+        for path in ['/session.php','/store.php','/owners.php']:
+            status,headers,body=browser.request(path,headers={'Cookie':old})
+            self.assertEqual(status,200,body[:200]);self.assertNotIn('set-cookie',headers,path)
+        self.assertEqual(browser.cookies,b.cookies)
+        self.assertEqual(self.json(self.raw(browser,path='/session.php'))['csrfToken'],b.csrf)
     def test_09_cancel_during_callback_never_issues_storage_session(self):
         c=sso.Client(self);cb,csrf=self.begin(c,delayMicros=600000)
         peer=sso.Client(self);peer.cookies=dict(c.cookies)

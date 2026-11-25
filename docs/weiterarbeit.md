@@ -62,12 +62,32 @@ das Firefox-Verhalten ist nur mit einer synthetischen Header-Reproduktion belegt
 
 Prüfstand vom 25.11.2026 mit PHP 8.4 und neu gebautem Kandidaten aus dem unveränderten Pin:
 SSO-HTTP 19/19, CAD-Build 9/9, CAD-HTTP/Browser für IServ 31 Tests bestanden (2 Profiltests
-übersprungen). Im synthetischen Campus-Profil bestanden alle Fälle außer dem Browserlauf:
-Er scheiterte im Arbeitsbaum in 5 von 7 Läufen beim Kopieren der Vorlage für das zweite
-Schülerkonto („liegt jetzt“ erscheint nicht), einmal mit CDP-Timeout bei der Navigation.
-Mit der alten `no-referrer`-Zeile trat derselbe Fehler in 1 von 4 Läufen auf; die übrigen
-drei scheiterten wie erwartet am Abmelden aus der CAD-Fußzeile. Der Vorlagenkonflikt hängt
-damit nicht an der Referrer-Policy, ist aber deutlich häufiger als bisher dokumentiert.
+übersprungen). Im synthetischen Campus-Profil bestanden alle Fälle außer dem Browserlauf.
+Er scheiterte in 10 von 40 Einzelläufen: neunmal beim Wechsel zum zweiten Schülerkonto
+(Vorlagenkopie meldet 409 oder CDP-Timeout bei der Navigation), einmal unter paralleler
+Last in der Stufe „offline gate“. Mit der alten `no-referrer`-Zeile trat der Vorlagenfehler
+ebenfalls auf; er hängt nicht an der Referrer-Policy. Das IServ-Profil lief nur einmal.
+
+Ursache des Vorlagenfehlers (Befund vom 25.11.2026): Im fehlgeschlagenen Lauf zeigte die
+Vorlagenseite die Dateiliste des ersten Schülerkontos, lief also nach dem Cookie-Wechsel
+des Tests noch in dessen Sitzung. `NativeSession::open()` setzt die Session-ID per
+`session_id()` und startet die Session mit `session.use_cookies=1`. PHP sendet dadurch bei
+jeder authentifizierten Antwort erneut `Set-Cookie` mit der bestehenden ID. Eine verspätete
+Antwort aus dem Editor des ersten Kontos kann so das alte Cookie nach dem Wechsel wieder
+setzen. Der CDP-Timeout passt zum `beforeunload`-Dialog, den Layerling bei noch laufender
+Speicherung zeigt; ein solcher Dialog wurde nicht direkt beobachtet. Für „offline gate“ ist
+derselbe Cookie-Mechanismus plausibel, aber nicht belegt.
+
+Korrektur: `NativeSession::open()` sendet das Session-Cookie nicht mehr erneut; nur
+`issue()` setzt und `revoke()` löscht es ausdrücklich. Das betrifft auch den Betrieb: Nach
+einer zweiten Anmeldung im selben Browserprofil ohne vorheriges Abmelden konnte eine späte
+Antwort aus einem alten Tab den Browser still auf das vorherige Konto zurückstellen. Die
+Regression `test_08b_late_response_from_old_account_keeps_new_login_cookie` scheitert mit
+dem alten Stand und besteht mit der Korrektur. Danach bestanden unter PHP 8.4 SSO-HTTP 19,
+SSO-Speicher 40, Prototyp-Speicher 35, integrierte Speichertests 22 je Profil, CAD-Build 9
+und CAD-HTTP/Browser 32 je Profil. Der Campus-Browserlauf bestand anschließend 15 von 15
+Mal unter derselben parallelen Last; ein sporadischer Fehler ist damit seltener geworden,
+aber nicht ausgeschlossen.
 
 Das Kontomenü in der CAD-Fußzeile öffnet sich über den Namen des ausgewählten
 Kontos. Bei Konten mit der konfigurierten Schülerrolle folgen vorhandene Klassen

@@ -30,8 +30,11 @@ final class NativeSession
         if (!is_string($id) || !preg_match('/^[a-f0-9]{64}$/D', $id)) { return null; }
         $file = $this->private . '/' . $this->directory . '/sess_' . $id;
         if (!is_file($file) || is_link($file)) { return null; }
-        // A token lookup supplies the ID internally. Never send that session as a cookie to the client.
-        $this->setup($trustedId === null);
+        // Never re-send the session cookie here. issue() sets it and revoke() clears it explicitly.
+        // A token lookup must not expose its session as a cookie, and with a preset session_id()
+        // PHP would repeat Set-Cookie on every response: a late response from an old tab could
+        // then restore the previous account's cookie after another login in the same browser.
+        $this->setup(false);
         session_id($id);
         if (!session_start() || !hash_equals($id, session_id())) { $this->revoke($trustedId === null); return null; }
         $s = $_SESSION; $now = time();
