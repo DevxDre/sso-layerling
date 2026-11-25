@@ -26,7 +26,7 @@ Kein eigener CAD-Editor, keine neue gemeinsame Bearbeitung und zunächst keine K
 
 ## 2. Lokal geprüfter Ausgangsstand
 
-Repository: https://github.com/DevxDre/layerling
+Layerling-Quellrepository: lokal im Deployment konfiguriert.
 
 - Lokaler Commit: `4b61a20b49c6fce9910a7903f53989d40396dfa4`.
 - Paketversion: `1.136.0`; im Paket angegebenes Node-Minimum: `22.18`.

@@ -282,9 +282,7 @@ def adapt_occt_runtime(source):
 def build(source, layerling, *, layerling_commit=None):
     metadata = validate_source(source, layerling_commit=layerling_commit)
     verify_source_tree(source, layerling, layerling_commit=layerling_commit)
-    env = {k:v for k,v in os.environ.items() if k in ['PATH','HOME','TMPDIR','LANG','LC_ALL','SHELL']}
-    env.update({'NEXT_TELEMETRY_DISABLED':'1', 'LAYERLING_BUILD_CPUS':'2',
-        'NEXT_PUBLIC_SUPPORT_HINT':'off', 'NEXT_PUBLIC_ANNOUNCEMENTS':'off'})
+    env = build_environment()
     subprocess.run(['npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund'], cwd=source, env=env, check=True)
     occt = adapt_occt_runtime(source)
     subprocess.run(['npm', 'run', 'export'], cwd=source, env=env, check=True)
@@ -308,9 +306,22 @@ def build(source, layerling, *, layerling_commit=None):
         if not (export/name).exists():
             raise ValueError('Incomplete export')
     metadata = {'source':metadata, 'node':subprocess.check_output(['node','--version'], text=True).strip(),
-        'npm':subprocess.check_output(['npm','--version'], text=True).strip(), 'supportHint':'off', 'occtRuntime':occt, 'files':files}
+        'npm':subprocess.check_output(['npm','--version'], text=True).strip(), 'supportHint':'off',
+        'sourceCodeUrl':env.get('NEXT_PUBLIC_SOURCE_CODE_URL'), 'occtRuntime':occt, 'files':files}
     (source/BUILD_MARKER).write_text(json.dumps(metadata, indent=2)+'\n')
     return metadata
+
+def build_environment(base=None):
+    inherited = os.environ if base is None else base
+    env = {k:v for k,v in inherited.items() if k in ['PATH','HOME','TMPDIR','LANG','LC_ALL','SHELL']}
+    env.update({'NEXT_TELEMETRY_DISABLED':'1', 'LAYERLING_BUILD_CPUS':'2',
+        'NEXT_PUBLIC_SUPPORT_HINT':'off', 'NEXT_PUBLIC_ANNOUNCEMENTS':'off'})
+    source_url = inherited.get('NEXT_PUBLIC_SOURCE_CODE_URL')
+    if source_url:
+        if not isinstance(source_url, str) or not source_url.startswith('https://') or any(c.isspace() for c in source_url):
+            raise ValueError('Invalid NEXT_PUBLIC_SOURCE_CODE_URL')
+        env['NEXT_PUBLIC_SOURCE_CODE_URL'] = source_url
+    return env
 
 def hashes(directory):
     result = {}
@@ -327,7 +338,11 @@ def package(source, layerling, output, installed_private=None, installed_public=
     verify_source_tree(source, layerling, layerling_commit=layerling_commit)
     report = json.loads((source/BUILD_MARKER).read_text())
     export = source/'apps/web/.next-export'
-    if report['source'] != metadata or report.get('supportHint') != 'off' or report['files'] != hashes(export):
+    source_url = report.get('sourceCodeUrl')
+    if (report['source'] != metadata or report.get('supportHint') != 'off'
+        or not (source_url is None or (isinstance(source_url, str) and source_url.startswith('https://')))
+        or (hosted_test and source_url is None)
+        or report['files'] != hashes(export)):
         raise ValueError('Export changed after verified build')
     occt = report.get('occtRuntime', {})
     if (occt.get('adapterSha256') != digest(OCCT_ADAPTER.read_bytes())

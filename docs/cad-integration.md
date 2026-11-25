@@ -107,13 +107,42 @@ extrahiert den Pin neu und verändert nur drei Dateien in dieser isolierten Kopi
 Original-Hashes. Vor/nach dem Build sowie beim Paketieren werden alle 1.786 ursprünglichen
 Dateien gegen das Git-Archiv plus diese Anpassungen geprüft. Zusätzliche Quellrouten,
 Build-Konfigurationen und lokale `.env`-Dateien werden abgewiesen. Die Dependency-Lockdatei
-bleibt unverändert; es wurden keine neuen Pakete oder Versionen hinzugefügt.
+bleibt unverändert; es wurden keine neuen Pakete oder Versionen hinzugefügt. Das lokale
+Deploy-Skript setzt `NEXT_PUBLIC_SOURCE_CODE_URL` beim Build; der Wert steht im privaten
+Buildbericht. Die Quell- und Installationsadressen bleiben in ignorierten Deployment-Dateien.
 
 Der öffentliche `/cad.php`-Controller liefert erst nach nativer SSO-Sitzungs- und
 Registerprüfung das private, hashgeprüfte Editor-HTML. Scripts erhalten pro Antwort
 eine CSP-Nonce; JavaScript benötigt kein `unsafe-inline`. WebAssembly sowie lokale
 `data:`-/`blob:`-Vorschaubilder sind gezielt zugelassen, externe Verbindungen nicht.
 Das HTML bleibt `private, no-store` und wird nicht als öffentliche `index.html` kopiert.
+
+### Datenschutz und externe Verbindungen
+
+Die ausgelieferte Layerling-Oberfläche darf keine Ressourcen oder Programmteile von
+anderen Webseiten nachladen. Die CSP setzt deshalb `default-src 'none'` und nennt
+jede benötigte lokale Ausnahme ausdrücklich. Scripts, API-Verbindungen, Worker und
+Medien bleiben auf den eigenen Ursprung begrenzt; `data:` und `blob:` gelten nur dort,
+wo der Editor sie für Vorschaubilder, Geometrie und Worker benötigt. Frames, Plugins
+und Web-App-Manifeste sind gesperrt. HTTPS wird für unsichere Unterressourcen erzwungen.
+Jede Antwort nutzt eine frische Script-Nonce, während die HTML-Datei selbst privat
+und gegen den Paket-Hash geprüft bleibt.
+
+Der Wrapper baut ausschließlich aus dem gepinnten Layerling-Commit, geprüften
+Adapteränderungen und der unveränderten Dependency-Lockdatei. Upstream-Releaseabfragen
+und Service Worker sind für diesen Schulbuild deaktiviert. Damit erhält der Browser
+Programmdaten vom Schulserver und registriert keinen Offline-Service-Worker.
+Der OIDC-Anmeldedienst bleibt eine beabsichtigte externe Verbindung für die Anmeldung;
+er bekommt keine CAD-Dateien über die Editor-API. Beim Wechsel zu externen Links wird
+kein Referrer mitgeschickt.
+
+Diese Regeln verhindern Browser-seitige Requests und Ausführung fremder Webressourcen,
+solange die HTML-Antwort und die ausgelieferten Dateien vertrauenswürdig sind und der
+Browser die CSP durchsetzt. Sie schützen nicht vor Schadcode, der bereits im geprüften
+Upstream-/Buildstand oder auf dem Schulserver liegt, vor kompromittierten Admin-Konten,
+Hoster-/Serverlogs oder lokalen Browsererweiterungen. Darum bleiben Quellpin,
+Paketprüfsummen, private Serververzeichnisse, Updates aus geprüften Ständen, Backups
+und die sparsame Protokollierung zusätzliche Schutzmaßnahmen.
 
 `cad/bridge.js` läuft vor den Layerling-Scripts und bindet jeden `store.php`-Aufruf an
 die eigene stabile Eigentümer-ID. Änderungen erhalten `X-SSO-CSRF`; Revisionsheader

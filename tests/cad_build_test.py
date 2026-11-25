@@ -17,6 +17,11 @@ class CadBuildTest(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp=tempfile.TemporaryDirectory(prefix='sso-cad-build-test-');cls.addClassCleanup(cls.tmp.cleanup)
         cls.root=Path(cls.tmp.name).resolve();cls.source=cls.root/'source';cad.prepare(OPTIONS.layerling,cls.source)
+    def test_00_build_accepts_local_source_link_and_filters_environment(self):
+        env=cad.build_environment({'PATH':'/synthetic/bin','NEXT_PUBLIC_SOURCE_CODE_URL':'https://source.example.invalid/project'})
+        self.assertEqual(env['NEXT_PUBLIC_SOURCE_CODE_URL'],'https://source.example.invalid/project')
+        self.assertEqual(env['PATH'],'/synthetic/bin')
+        self.assertNotIn('UNRELATED_SECRET',env)
     def test_01_pin_and_original_backend_unchanged(self):
         cad.verify_source_tree(self.source,OPTIONS.layerling)
         self.assertEqual(cad.digest((self.source/'apps/web/public/store.php').read_bytes()),cad.pin()[0]['sha256'])
