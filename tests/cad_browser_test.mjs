@@ -15,6 +15,7 @@ const chrome=spawn(process.env.SSO_CAD_CHROME || '/Applications/Google Chrome.ap
   '--no-first-run','--no-default-browser-check','--disable-background-networking',
   '--remote-debugging-address=127.0.0.1','--remote-debugging-port=0',`--user-data-dir=${profile}`,'about:blank'],{stdio:'ignore'});
 let stage='startup';let ws;let sequence=0;const pending=new Map();const errors=[];
+let forcedDenial=null; // one intercepted store.php upload is answered with 403 {error: forcedDenial}
 const manifestRequests = [];
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 function command(method,params={}){return new Promise((resolve,reject)=>{
@@ -205,7 +206,11 @@ try{
       const query=new URL(params.request.url).searchParams;
       const failedUpload=params.request.method==='POST' && query.has('fileName');
       const failedSearch=params.request.method==='GET' && query.get('search')==='fixture-failure';
-      const call=failedUpload || failedSearch
+      const denial=failedUpload ? forcedDenial : null;
+      if (denial) forcedDenial=null;
+      const call=denial
+        ? command('Fetch.fulfillRequest',{requestId:params.requestId,responseCode:403,responseHeaders:[{name:'Content-Type',value:'application/json'}],body:Buffer.from(JSON.stringify({error:denial})).toString('base64')})
+        : failedUpload || failedSearch
         ? command('Fetch.fulfillRequest',{requestId:params.requestId,responseCode:failedUpload ? 500 : 503,responseHeaders:[{name:'Content-Type',value:'application/json'}],body:Buffer.from(JSON.stringify({error:failedUpload ? 'fixture upload failure' : 'fixture search failure'})).toString('base64')})
         : command('Fetch.continueRequest',{requestId:params.requestId});
       void call.catch(()=>errors.push('Test interception failed'));
@@ -354,8 +359,22 @@ try{
   await waitFor("document.body.textContent.includes('fixture upload failure')",'upload failure shown');
   assert.equal(await evaluate("location.search.includes('editor=1')"),false,'failed server create does not silently open local editor');
   assert.equal(await evaluate("(await (await fetch('/store.php')).json()).projects.length"),0,'failed file not saved');
+  stage='server permission denial keeps the editor open';
+  forcedDenial='access_denied';
+  const denied=await evaluate("(async()=>{const r=await fetch('/store.php?fileName=fixture-denied.lyl',{method:'POST',body:new Uint8Array([1])});return [r.status,(await r.json()).error];})()");
+  assert.equal(denied[0],403);
+  assert.match(denied[1],/Berechtigung/,'permission denial shown in German, not as a raw code');
+  assert.equal(await evaluate("document.documentElement.dataset.ssoCad"),'ready','valid session stays usable after a permission denial');
+  assert.equal(forcedDenial,null,'denial was served');
   await command('Fetch.disable');
   assert.equal(await evaluate("(await fetch("+JSON.stringify(sourceQuery)+",{method:'POST',headers:{'Content-Type':'application/vnd.layerling.project+zip'},body:new Uint8Array("+JSON.stringify(originalBytes)+")})).status"),201,'same filename in a different student area');
+  stage='rejected request locks the editor';
+  await command('Fetch.enable',{patterns:[{urlPattern:fixture.origin+'/store.php*',requestStage:'Request'}]});
+  forcedDenial='csrf_rejected';
+  assert.equal(await evaluate("fetch('/store.php?fileName=fixture-rejected.lyl',{method:'POST',body:new Uint8Array([1])}).then(()=>false,()=>true)"),true,'CSRF rejection is not passed to Layerling');
+  assert.equal(await evaluate("document.documentElement.dataset.ssoCad"),'locked','CSRF rejection locks the editor');
+  await command('Fetch.disable');
+  await navigate('/cad.php');
   stage='offline gate';
   await command('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:-1,uploadThroughput:-1});
   await evaluate("fetch('/store.php').catch(()=>null)");

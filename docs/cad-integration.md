@@ -154,6 +154,10 @@ bleiben erhalten. Die Sitzungsprüfung erfolgt vor und nach Dateiaufrufen. Datei
 werden für die Übertragung als Blob verwendet, damit auch Chromium über HTTP/1.1
 Multipart-/ZIP-Uploads unterstützt. Vorschaubild-URLs behalten den eigenen Eigentümer.
 Die ursprünglichen PHP-Rechteprüfungen bleiben maßgeblich und unverändert.
+Antwortet `store.php` mit 403 `access_denied`, prüft die Bridge die Sitzung erneut: Bei
+gewechselter oder beendeter Anmeldung sperrt sie den Editor, sonst bleibt er offen und
+Layerling zeigt eine deutsche Berechtigungsmeldung. Jede andere 403-Antwort, etwa
+`foreign_request` oder `csrf_rejected`, sperrt den Editor, statt den Code anzuzeigen.
 
 localStorage, sessionStorage, IndexedDB und BroadcastChannel erhalten vor dem Start
 des Editors einen Benutzer-Namensraum; Storage-Events werden entsprechend gefiltert.

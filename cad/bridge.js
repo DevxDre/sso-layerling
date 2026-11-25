@@ -388,10 +388,18 @@
     if (response.status === 401) {
       lock('Die Anmeldung ist nicht mehr gültig. Bitte erneut anmelden.'); throw new Error('Authentication expired');
     }
-    // A 403 can mean the actor is authenticated but cannot write to this
-    // account's file area. Keep the editor session alive and let Layerling
-    // display the endpoint's permission error instead of claiming logout.
-    if (response.status === 403) return response;
+    if (response.status === 403) {
+      const code = await response.clone().json().then(value => value?.error, () => null);
+      // access_denied: the rights changed after the last probe. probe() locks when the login
+      // changed or ended; otherwise it refreshes canWrite/canDelete and the editor stays open.
+      if (code === 'access_denied') {
+        await probe();
+        return Response.json({error: 'Für diese Aktion fehlt in diesem Dateibereich die Berechtigung.'}, {status: 403});
+      }
+      // Origin/CSRF rejections and unknown denials: the request no longer belongs to this login.
+      lock('Der Server hat die Anfrage abgelehnt. Bitte die Seite neu laden.');
+      throw new Error('Request rejected');
+    }
     await probe(); // Also reject responses completed after another login/logout.
     if (response.headers.get('content-type')?.includes('application/json') && response.ok) {
       const value = await response.json();

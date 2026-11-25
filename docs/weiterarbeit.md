@@ -89,6 +89,13 @@ und CAD-HTTP/Browser 32 je Profil. Der Campus-Browserlauf bestand anschließend 
 Mal unter derselben parallelen Last; ein sporadischer Fehler ist damit seltener geworden,
 aber nicht ausgeschlossen.
 
+Die CAD-Bridge reicht Server-403 nicht mehr ungeprüft an Layerling weiter (`d673e75` hatte
+das Symptom der Referrer-Policy als Rechteproblem behandelt). Bei `access_denied` prüft sie
+die Sitzung erneut und zeigt bei gültiger Anmeldung eine deutsche Berechtigungsmeldung;
+jede andere 403-Antwort sperrt den Editor. Der Browsertest erzwingt beide Fälle per
+Interception; mit der vorherigen Bridge scheitert er. CAD-Build 9 und CAD-HTTP/Browser 32
+je Profil bestanden mit einem neu paketierten Kandidaten.
+
 Das Kontomenü in der CAD-Fußzeile öffnet sich über den Namen des ausgewählten
 Kontos. Bei Konten mit der konfigurierten Schülerrolle folgen vorhandene Klassen
 in Klammern. Ein fremder Projektbereich trägt den Zusatz „Fremdes Konto“.
