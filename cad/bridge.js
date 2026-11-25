@@ -385,9 +385,13 @@
       if (request.signal.aborted) throw error;
       lock('Die Übertragung ist fehlgeschlagen. Der Server-Speicherstand ist nicht bestätigt.'); throw error;
     }
-    if (response.status === 401 || response.status === 403) {
-      lock('Der Zugriff wurde beendet. Bitte erneut anmelden.'); throw new Error('Access revoked');
+    if (response.status === 401) {
+      lock('Die Anmeldung ist nicht mehr gültig. Bitte erneut anmelden.'); throw new Error('Authentication expired');
     }
+    // A 403 can mean the actor is authenticated but cannot write to this
+    // account's file area. Keep the editor session alive and let Layerling
+    // display the endpoint's permission error instead of claiming logout.
+    if (response.status === 403) return response;
     await probe(); // Also reject responses completed after another login/logout.
     if (response.headers.get('content-type')?.includes('application/json') && response.ok) {
       const value = await response.json();
