@@ -12,12 +12,15 @@ final class LoginFailed extends \RuntimeException
         USERINFO='userinfo', USERINFO_MISMATCH='userinfo_mismatch', CLAIMS='claims',
         ACCOUNT='account', ACCOUNT_WRITE='account_write', ACCOUNT_LOCK='account_lock',
         SIGNED_IN='signed_in', RATE_LIMIT='rate_limit', SESSION='session';
-    public function __construct(public readonly string $reason, ?string $detail = null)
+    public function __construct(public readonly string $reason, ?string $detail = null, ?string $hint = null)
     {
         $this->detail = $detail !== null && preg_match('/^[a-z0-9_:.-]{1,64}$/iD', $detail) === 1
             ? $detail : null;
+        // Optional fixed-vocabulary diagnostic finding (e.g. a role comparison), never provider data.
+        $this->hint = $hint !== null && preg_match('/^[a-z0-9_:+.-]{1,64}$/D', $hint) === 1 ? $hint : null;
         parent::__construct('Login failed: ' . $reason . ($this->detail !== null ? ':' . $this->detail : ''));
     }
 
     public readonly ?string $detail;
+    public readonly ?string $hint;
 }

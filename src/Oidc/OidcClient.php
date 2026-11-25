@@ -107,7 +107,13 @@ final class OidcClient
         $consistent = ['iss', 'aud', $mapping['identity']['claim'], $mapping['roles']['claim'], $mapping['groups']['claim']];
         foreach ($consistent as $name) {
             if (array_key_exists($name, $claims) === true && array_key_exists($name, $userinfo) === true && serialize($claims[$name]) !== serialize($userinfo[$name])) {
-                throw new LoginFailed(LoginFailed::USERINFO_MISMATCH, $name);
+                $hint = null;
+                if ($name === $mapping['roles']['claim']) {
+                    $summary = RoleClaimDiagnostic::compare($claims[$name], $userinfo[$name], $mapping['roles']);
+                    error_log('sso-layerling oidc_role_mismatch ' . json_encode($summary, JSON_THROW_ON_ERROR));
+                    $hint = RoleClaimDiagnostic::hint($summary);
+                }
+                throw new LoginFailed(LoginFailed::USERINFO_MISMATCH, $name, $hint);
             }
         }
 

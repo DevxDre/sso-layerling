@@ -52,6 +52,18 @@ Bei fehlgeschlagenen SSO-Anmeldungen zeigt die Fehlerseite jetzt einen festen
 technischen Fehlercode und eine kurze Einordnung. Zulässige Detailcodes wie ein
 OAuth-Fehlercode oder der betroffene Claim helfen bei der Diagnose; Freitext des
 Anmeldedienstes und interne Serverfehlerdetails werden nicht ausgegeben.
+Bei einem Rollen-Claim-Konflikt schreibt der Wrapper unter `sso-layerling oidc_role_mismatch`
+eine Zusammenfassung ins PHP-Fehlerprotokoll. Sie enthält die Rollenzahl und, bei
+vergleichbaren Listen, die Übereinstimmung der Rollen-IDs. Haben beide Seiten dieselben
+IDs, vergleicht die Diagnose zusätzlich die Rollenreihenfolge, die Feldnamen und deren
+Reihenfolge sowie die Werte gemeinsam vorhandener Felder. Rohdaten wie Token, Rollen-IDs,
+Feldnamen und Feldwerte werden dafür nicht protokolliert. Die Anmeldung bleibt abgelehnt.
+Weichen die Rollen-IDs ab, nennt die Zusammenfassung zusätzlich, wie viele Rollen nur im
+ID-Token und wie viele nur in den Kontodaten stehen. Weil der Zugang zum PHP-Fehlerprotokoll
+beim Hoster nicht belegt ist, zeigt die Fehlerseite denselben Befund als festen Kurzcode
+unter „Rollenabgleich“ mit deutscher Erläuterung, etwa `ids:0-1` oder `same-ids:order`.
+Für die Rechte zählt nur die Menge der Rollen-IDs; ob der Vergleich darauf gelockert wird,
+ist nach dem Befund gesondert zu entscheiden.
 
 Die mit der Diagnose eingeführte CAD-Header-Härtung ist korrigiert: `/cad.php` sendet
 wieder `Referrer-Policy: same-origin`, und `connect-src` erlaubt `data:`. Mit

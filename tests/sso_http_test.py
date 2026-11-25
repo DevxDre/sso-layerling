@@ -244,4 +244,55 @@ class SsoHTTPTest(unittest.TestCase):
         self.assertEqual(rejected[0],503)
         self.assertEqual(rejected[1]['referrer-policy'],'no-referrer')
 
+    def test_19_role_mismatch_logs_comparison_without_claim_values(self):
+        student = {'id': 'ROLE_STUDENT', 'displayName': 'Fixture student'}
+        second = {'id': 'ROLE_FIXTURE', 'displayName': 'Fixture extra role'}
+        private_field = {'fixturePrivateField': 'fixture private value'}
+        matches = {'roleIdsMatch': True, 'roleOrderMatches': True, 'fieldNamesMatch': True,
+                   'fieldOrderMatches': True, 'sharedFieldValuesMatch': True}
+        cases = [
+            ('role IDs', [student], [second], {'roleIdsMatch': False, 'onlyInIdToken': 1, 'onlyInUserInfo': 1},
+             'ids:1-1', '1 nur im ID-Token, 1 nur in den Kontodaten'),
+            ('role missing in token', [student], [student, second],
+             {'roleIdsMatch': False, 'onlyInIdToken': 0, 'onlyInUserInfo': 1},
+             'ids:0-1', '0 nur im ID-Token, 1 nur in den Kontodaten'),
+            ('role order', [student, second], [second, student], matches | {'roleOrderMatches': False},
+             'same-ids:order', 'abweichend: Reihenfolge der Rollen'),
+            ('field order', [student], [{'displayName': 'Fixture student', 'id': 'ROLE_STUDENT'}],
+             matches | {'fieldOrderMatches': False}, 'same-ids:field-order', 'abweichend: Reihenfolge der Felder'),
+            ('extra field', [student], [student | private_field],
+             matches | {'fieldNamesMatch': False, 'fieldOrderMatches': None}, 'same-ids:fields', 'abweichend: Felder der Rollen'),
+            ('field value', [student], [student | {'displayName': 'Other fixture name'}],
+             matches | {'sharedFieldValuesMatch': False}, 'same-ids:values', 'abweichend: Feldwerte'),
+            ('invalid list', [student], student, {'userInfoIssue': 'invalid_role_list'},
+             'userinfo:invalid_role_list', 'Kontodaten ist keine gültige Rollenliste'),
+            ('duplicate role', [student], [student, student], {'userInfoIssue': 'duplicate_role_id'},
+             'userinfo:duplicate_role_id', 'Kontodaten enthält eine Rolle doppelt'),
+        ]
+        principal_file = self.private / 'principals.json'
+        before = principal_file.read_bytes()
+        log = self.root / 'server.log'
+        for name, token_roles, info_roles, result, hint, sentence in cases:
+            with self.subTest(name=name):
+                self.client = Client(self)
+                callback, _ = self.begin(claims={'iserv:roles': token_roles}, userinfoClaims={'iserv:roles': info_roles})
+                offset = log.stat().st_size
+                status, _, body = self.client.request(callback)
+                self.assertEqual(status, 503)
+                self.assertIn(b'<code>userinfo_mismatch:iserv:roles</code>', body)
+                # The fixed-vocabulary finding is shown to the user; role IDs and field values are not.
+                self.assertIn(('Rollenabgleich: <code>' + hint + '</code>').encode(), body)
+                self.assertIn(sentence.encode(), body)
+                for secret in [b'ROLE_STUDENT', b'ROLE_FIXTURE', b'Fixture student', b'fixturePrivateField', b'fixture private value']:
+                    self.assertNotIn(secret, body)
+                self.assertNotIn('SSO_LAYERLING_SSO_TEST', self.client.cookies)
+                with log.open('rb') as stream:
+                    stream.seek(offset)
+                    summaries = re.findall(rb'sso-layerling oidc_role_mismatch (\{[^\r\n]+\})', stream.read())
+                expected = {'idTokenCount': len(token_roles),
+                            'userInfoCount': len(info_roles) if isinstance(info_roles, list) else None,
+                            'idTokenIssue': None, 'userInfoIssue': None} | result
+                self.assertEqual([json.loads(summary) for summary in summaries], [expected])
+        self.assertEqual(principal_file.read_bytes(), before)
+
 if __name__=='__main__':unittest.main(argv=['sso_http_test.py']+remaining,verbosity=2)

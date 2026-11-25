@@ -38,14 +38,43 @@ final class LoginFailurePage
         $message = $known ? self::MESSAGES[$reason] : 'Ein unerwarteter Serverfehler hat die Anmeldung verhindert.';
         $code = $reason . ($detail !== null ? ':' . $detail : '');
         $escape = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $hint = $known && $reason === LoginFailed::USERINFO_MISMATCH && $error->hint !== null
+            ? self::roleHint($error->hint) : null;
 
         http_response_code(503);
         header('Content-Type: text/html; charset=utf-8');
         echo '<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Anmeldung nicht abgeschlossen</title></head>'
             . '<body><main><h1>Anmeldung nicht abgeschlossen</h1><p>' . $escape($message) . '</p>'
             . '<p>Technischer Fehlercode: <code>' . $escape($code) . '</code></p>'
+            . ($hint !== null ? '<p>Rollenabgleich: <code>' . $escape($error->hint) . '</code> – ' . $escape($hint) . '</p>' : '')
             . '<p>Bitte starte die Anmeldung erneut. Wenn der Fehler wieder auftritt, gib der Betreuung den Fehlercode weiter.</p>'
             . '<a href="/index.php">Zur Anmeldung</a></main></body></html>';
         exit;
+    }
+
+    /** German sentence for a role comparison finding; unknown findings are not shown. */
+    private static function roleHint(string $hint): ?string
+    {
+        $issues = ['invalid_role_list' => 'ist keine gültige Rollenliste', 'invalid_role_id' => 'enthält eine ungültige Rollen-ID',
+            'duplicate_role_id' => 'enthält eine Rolle doppelt'];
+        if (preg_match('/^(token|userinfo):([a-z_]+)$/D', $hint, $m) === 1 && isset($issues[$m[2]])) {
+            return ($m[1] === 'token' ? 'Die Rollenangabe im ID-Token ' : 'Die Rollenangabe in den Kontodaten ') . $issues[$m[2]] . '.';
+        }
+        if (preg_match('/^ids:(\d{1,3})-(\d{1,3})$/D', $hint, $m) === 1) {
+            return 'Die Rollen-IDs weichen ab: ' . $m[1] . ' nur im ID-Token, ' . $m[2] . ' nur in den Kontodaten.';
+        }
+        $labels = ['order' => 'Reihenfolge der Rollen', 'fields' => 'Felder der Rollen',
+            'field-order' => 'Reihenfolge der Felder', 'values' => 'Feldwerte'];
+        if ($hint === 'same-ids:other') {
+            return 'Die Rollen-IDs stimmen überein; die Darstellung weicht auf andere Weise ab.';
+        }
+        if (preg_match('/^same-ids:([a-z+-]+)$/D', $hint, $m) === 1) {
+            $parts = explode('+', $m[1]);
+            if (array_diff($parts, array_keys($labels)) === []) {
+                return 'Die Rollen-IDs stimmen überein; abweichend: ' . implode(', ', array_map(static fn(string $part): string => $labels[$part], $parts)) . '.';
+            }
+        }
+
+        return null;
     }
 }
