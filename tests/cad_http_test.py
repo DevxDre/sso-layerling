@@ -260,12 +260,14 @@ class CadHTTPTest(base.IntegratedStorageTest):
         csp = headers['content-security-policy']
         self.assertIn("default-src 'none'", csp)
         self.assertIn("script-src 'self' 'nonce-", csp)
-        self.assertIn("connect-src 'self' blob:", csp)
+        # Layerling reads canvas thumbnails with fetch(data:) before uploading them.
+        self.assertIn("connect-src 'self' data: blob:", csp)
         self.assertIn("frame-src 'none'", csp)
         self.assertIn("object-src 'none'", csp)
         self.assertIn("manifest-src 'none'", csp)
         self.assertIn('upgrade-insecure-requests', csp)
-        self.assertEqual(headers['referrer-policy'], 'no-referrer')
+        # no-referrer makes editor writes, MCP and the footer logout arrive with Origin:null.
+        self.assertEqual(headers['referrer-policy'], 'same-origin')
         self.assertEqual(headers['permissions-policy'], 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), hid=(), bluetooth=()')
         self.assertEqual(headers['x-frame-options'], 'DENY')
         context = json.loads(re.search(rb'id="sso-cad-context" type="application/json">(.*?)</script>', html)[1])

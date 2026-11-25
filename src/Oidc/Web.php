@@ -285,15 +285,19 @@ final class Web
             .'<script nonce="'.$nonce.'" src="/cad-bridge.js'.($mcpTest && $this->storage->secure ? '?v=mcp-2' : '').'"></script>';
         if (substr_count($html,'<head>')!==1) { throw new LoginFailed(LoginFailed::CONFIG); }
         $html = str_replace('<head>','<head>'.$head,$html);
-        header('Referrer-Policy: no-referrer');
+        // The editor POSTs to store.php, MCP and logout. Under no-referrer browsers send
+        // Origin:null for native form POSTs and Firefox also for fetch(mode:'same-origin'),
+        // which the Origin checks reject. same-origin still sends no referrer to other sites.
+        header('Referrer-Policy: same-origin');
         header('X-Content-Type-Options: nosniff');
         header('X-Frame-Options: DENY');
         header('Cross-Origin-Resource-Policy: same-origin');
         header('Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), hid=(), bluetooth=()');
         // Layerling and its reviewed CAD runtimes are served by this deployment only.
         // Keep the exceptions required by the renderer explicit; never fall back to a
-        // same-origin default for an unlisted resource type.
-        header("Content-Security-Policy: default-src 'none'; script-src 'self' 'nonce-".$nonce."' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' blob:; worker-src 'self' blob:; media-src 'self' blob:; frame-src 'none'; child-src 'none'; object-src 'none'; manifest-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests");
+        // same-origin default for an unlisted resource type. connect-src data: lets Layerling
+        // turn its canvas thumbnails into upload blobs; data: URLs cause no network request.
+        header("Content-Security-Policy: default-src 'none'; script-src 'self' 'nonce-".$nonce."' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' data: blob:; worker-src 'self' blob:; media-src 'self' blob:; frame-src 'none'; child-src 'none'; object-src 'none'; manifest-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests");
         header('Cache-Control: private, no-store');
         header_remove('Expires');
         header('Content-Type: text/html; charset=utf-8');

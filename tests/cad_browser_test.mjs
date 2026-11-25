@@ -262,6 +262,9 @@ try{
   stage='offline worker check';assert.equal(await evaluate("navigator.serviceWorker.controller===null && (await navigator.serviceWorker.getRegistrations()).length===0"),true,'no offline worker');
   stage='listing';assert.equal(await evaluate("(await fetch('/store.php')).status"),200,'authenticated adapter listing');
   assert.equal(await evaluate("(await fetch('/store.php?_sso_owner="+fixture.otherOwner+"').then(()=>false,()=>true))"),true,'foreign owner refused by own-only bridge');
+  // Layerling reads canvas thumbnails via fetch(data:) before uploads; the document CSP must allow it.
+  stage='thumbnail data URL under the document CSP';
+  assert.equal(await evaluate("(await (await fetch('data:image/png;base64,iVBORw0KGgo=')).blob()).type"),'image/png','thumbnail data URL readable');
   // Verify real browser cache partitioning with an unscoped legacy value left outside the facade.
   await evaluate("(localStorage.setItem('sso-test','owner-A'),sessionStorage.setItem('sso-test','A-tab'))");
   stage='create button';await waitFor("Array.from(document.querySelectorAll('button')).some(b=>/create new 3d design|neuen 3d.*(?:anlegen|erstellen)/i.test(b.textContent))",'create control');

@@ -134,7 +134,11 @@ und Service Worker sind für diesen Schulbuild deaktiviert. Damit erhält der Br
 Programmdaten vom Schulserver und registriert keinen Offline-Service-Worker.
 Der OIDC-Anmeldedienst bleibt eine beabsichtigte externe Verbindung für die Anmeldung;
 er bekommt keine CAD-Dateien über die Editor-API. Beim Wechsel zu externen Links wird
-kein Referrer mitgeschickt.
+kein Referrer mitgeschickt (`Referrer-Policy: same-origin`). `no-referrer` ist für den
+Editor ungeeignet: Browser senden dann bei Formular-POSTs wie dem Abmelden und Firefox
+auch bei Speicheraufrufen der Bridge `Origin: null`, das die Origin-Prüfung ablehnt
+(`foreign_request`). `connect-src` erlaubt `data:`, weil Layerling Vorschaubilder vor dem
+Hochladen per `fetch` aus `data:`-Adressen liest; dabei entsteht kein Netzwerkverkehr.
 
 Diese Regeln verhindern Browser-seitige Requests und Ausführung fremder Webressourcen,
 solange die HTML-Antwort und die ausgelieferten Dateien vertrauenswürdig sind und der

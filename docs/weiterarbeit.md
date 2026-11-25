@@ -53,6 +53,22 @@ technischen Fehlercode und eine kurze Einordnung. Zulässige Detailcodes wie ein
 OAuth-Fehlercode oder der betroffene Claim helfen bei der Diagnose; Freitext des
 Anmeldedienstes und interne Serverfehlerdetails werden nicht ausgegeben.
 
+Die mit der Diagnose eingeführte CAD-Header-Härtung ist korrigiert: `/cad.php` sendet
+wieder `Referrer-Policy: same-origin`, und `connect-src` erlaubt `data:`. Mit
+`no-referrer` lehnte die Origin-Prüfung neue Designs und Speicherstände in Firefox
+(`foreign_request`) sowie das Abmelden aus der CAD-Fußzeile in allen Browsern ab; ohne
+`data:` scheiterte das Hochladen von Vorschaubildern. Der Browsertest ist Chromium-only;
+das Firefox-Verhalten ist nur mit einer synthetischen Header-Reproduktion belegt.
+
+Prüfstand vom 25.11.2026 mit PHP 8.4 und neu gebautem Kandidaten aus dem unveränderten Pin:
+SSO-HTTP 19/19, CAD-Build 9/9, CAD-HTTP/Browser für IServ 31 Tests bestanden (2 Profiltests
+übersprungen). Im synthetischen Campus-Profil bestanden alle Fälle außer dem Browserlauf:
+Er scheiterte im Arbeitsbaum in 5 von 7 Läufen beim Kopieren der Vorlage für das zweite
+Schülerkonto („liegt jetzt“ erscheint nicht), einmal mit CDP-Timeout bei der Navigation.
+Mit der alten `no-referrer`-Zeile trat derselbe Fehler in 1 von 4 Läufen auf; die übrigen
+drei scheiterten wie erwartet am Abmelden aus der CAD-Fußzeile. Der Vorlagenkonflikt hängt
+damit nicht an der Referrer-Policy, ist aber deutlich häufiger als bisher dokumentiert.
+
 Das Kontomenü in der CAD-Fußzeile öffnet sich über den Namen des ausgewählten
 Kontos. Bei Konten mit der konfigurierten Schülerrolle folgen vorhandene Klassen
 in Klammern. Ein fremder Projektbereich trägt den Zusatz „Fremdes Konto“.
