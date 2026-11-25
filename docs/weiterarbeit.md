@@ -48,6 +48,11 @@ Die Kontoseite und der manuelle Anmeldeeinstieg verwenden dieselbe Gestaltung.
 Im Konto stehen Name, Account und Klasse vor den aufklappbaren Angaben zu Rollen
 und Gruppen. Das Stylesheet ist auch im reinen SSO-Testpaket enthalten.
 
+Bei fehlgeschlagenen SSO-Anmeldungen zeigt die Fehlerseite jetzt einen festen
+technischen Fehlercode und eine kurze Einordnung. Zulässige Detailcodes wie ein
+OAuth-Fehlercode oder der betroffene Claim helfen bei der Diagnose; Freitext des
+Anmeldedienstes und interne Serverfehlerdetails werden nicht ausgegeben.
+
 Das Kontomenü in der CAD-Fußzeile öffnet sich über den Namen des ausgewählten
 Kontos. Bei Konten mit der konfigurierten Schülerrolle folgen vorhandene Klassen
 in Klammern. Ein fremder Projektbereich trägt den Zusatz „Fremdes Konto“.
@@ -110,3 +115,13 @@ hält den Abnahmevertrag für beide Deployment-Profile fest.
 
 Prüfaufrufe: [SSO-Teststand](sso-teststand.md), [CAD-Integration](cad-integration.md).
 Commit, Push und Deployment nur im ausdrücklich beauftragten Umfang durchführen.
+
+
+## Deployment-Vorbereitung
+
+Die CAD-Paketierung verwendet den neutralen Schalter `--hosted-test`. Gehostete Pakete
+benötigen weiterhin eine ausdrückliche private Deployment-Konfiguration und einen sauberen
+Quellcommit. Für bestehende Installationen sind alte Marker/Layout und neue Zielpfade vor
+der Umschaltung gesondert zu migrieren. Ein separates Staging-Ziel benötigt derzeit noch
+geprüft konfigurierbare Installer-Pfade. Öffentliche Anleitungen enthalten keine konkreten
+SSH-Zugangspunkte; reale Transfer- und Migrationspläne werden privat geführt.

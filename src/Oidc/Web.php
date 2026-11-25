@@ -285,8 +285,15 @@ final class Web
             .'<script nonce="'.$nonce.'" src="/cad-bridge.js'.($mcpTest && $this->storage->secure ? '?v=mcp-2' : '').'"></script>';
         if (substr_count($html,'<head>')!==1) { throw new LoginFailed(LoginFailed::CONFIG); }
         $html = str_replace('<head>','<head>'.$head,$html);
-        header('Referrer-Policy: same-origin');
-        header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-".$nonce."' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' data: blob:; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+        header('Referrer-Policy: no-referrer');
+        header('X-Content-Type-Options: nosniff');
+        header('X-Frame-Options: DENY');
+        header('Cross-Origin-Resource-Policy: same-origin');
+        header('Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), hid=(), bluetooth=()');
+        // Layerling and its reviewed CAD runtimes are served by this deployment only.
+        // Keep the exceptions required by the renderer explicit; never fall back to a
+        // same-origin default for an unlisted resource type.
+        header("Content-Security-Policy: default-src 'none'; script-src 'self' 'nonce-".$nonce."' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' blob:; worker-src 'self' blob:; media-src 'self' blob:; frame-src 'none'; child-src 'none'; object-src 'none'; manifest-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests");
         header('Cache-Control: private, no-store');
         header_remove('Expires');
         header('Content-Type: text/html; charset=utf-8');
@@ -325,7 +332,12 @@ final class Web
         $contextId = $ctx->id;
         $ctx->close();
         // No native session or authorization/context lock during external requests.
-        if (isset($_GET['error']) || (isset($_GET['iss']) && $_GET['iss'] !== $this->config->profile->issuer)) { throw new LoginFailed(LoginFailed::PROVIDER_ERROR); }
+        if (isset($_GET['error']) || (isset($_GET['iss']) && $_GET['iss'] !== $this->config->profile->issuer)) {
+            $providerError = $_GET['error'] ?? null;
+            $detail = is_string($providerError) && preg_match('/^[A-Za-z0-9_-]{1,40}$/D', $providerError) === 1
+                ? strtolower($providerError) : null;
+            throw new LoginFailed(LoginFailed::PROVIDER_ERROR, $detail);
+        }
         $code = $_GET['code'] ?? null;
         if (!is_string($code) || !preg_match('/^[\x21-\x7e]{1,4096}$/D', $code)) { throw new LoginFailed(LoginFailed::CODE); }
         $identity = (new OidcClient($this->config, $this->transport, static fn() => time()))->complete($tx, $code);

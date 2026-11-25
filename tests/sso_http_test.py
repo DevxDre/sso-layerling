@@ -66,7 +66,7 @@ class SsoHTTPTest(unittest.TestCase):
         require %s;
         require %s;
         \\Sso\\Layerling\\Oidc\\Web::headers();
-        set_exception_handler(static function(\\Throwable $e):void{http_response_code(503);echo 'Login not completed';});
+        set_exception_handler(static function(\\Throwable $e):void{\\Sso\\Layerling\\Oidc\\LoginFailurePage::render($e);});
         $profile = \\Sso\\Layerling\\Oidc\\Profile::load(%s);
         $config = new \\Sso\\Layerling\\Oidc\\Config('test-client',str_repeat('s',32),$profile);
         return new \\Sso\\Layerling\\Oidc\\Web(%s,$config,new \\Sso\\Layerling\\Tests\\FakeProvider(%s,$config),%s);
@@ -166,13 +166,15 @@ class SsoHTTPTest(unittest.TestCase):
         self.assertEqual(self.exchanges(),0)
     def test_08_provider_error_consumes_without_exchange(self):
         cb,_=self.begin();cb=cb.replace('code=fixture-code','error=invalid_request&error_description=PRIVATE_PROVIDER_TEXT')
-        r=self.client.request(cb);self.assertEqual(r[0],503);self.assertNotIn(b'PRIVATE_PROVIDER_TEXT',r[2])
+        r=self.client.request(cb);self.assertEqual(r[0],503);self.assertIn(b'provider_error:invalid_request',r[2]);self.assertNotIn(b'PRIVATE_PROVIDER_TEXT',r[2])
         self.assertEqual(self.exchanges(),0)
         self.assertEqual(self.client.request(cb)[0],503)
     def test_09_bad_nonce_and_userinfo_cannot_issue_session(self):
         for flags in [{'badNonce':'wrong'},{'badSub':True}]:
             self.client=Client(self);cb,_=self.begin(**flags)
-            self.assertEqual(self.client.request(cb)[0],503)
+            response=self.client.request(cb);self.assertEqual(response[0],503)
+            if flags.get('badNonce'):
+                self.assertIn(b'Technischer Fehlercode: <code>nonce</code>',response[2])
             self.assertNotIn('SSO_LAYERLING_SSO_TEST',self.client.cookies)
     def test_10_cancel_before_callback(self):
         cb,csrf=self.begin();self.assertEqual(self.client.request('/auth/logout.php','POST',{'csrf':csrf})[0],303)

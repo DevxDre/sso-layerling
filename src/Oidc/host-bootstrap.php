@@ -6,10 +6,8 @@ require dirname(__DIR__, 2) . '/vendor/autoload.php';
 \Sso\Layerling\Oidc\Web::headers();
 ini_set('display_errors', '0');
 set_exception_handler(static function (\Throwable $e): void {
-    // No provider error, request query, token, path or credential is echoed/logged.
-    http_response_code(503);
-    header('Content-Type: text/html; charset=utf-8');
-    echo '<!doctype html><html lang="de"><meta charset="utf-8"><title>Anmeldung nicht abgeschlossen</title><h1>Anmeldung nicht abgeschlossen</h1><p>Bitte die Anmeldung erneut beginnen. Bei wiederholten Fehlern die Betreuung informieren.</p><a href="/index.php">Zur Anmeldung</a></html>';
+    // Only fixed reason identifiers and constrained details are shown; never provider text or exception messages.
+    \Sso\Layerling\Oidc\LoginFailurePage::render($e);
 });
 umask(0077);
 $private = dirname(__DIR__, 3);

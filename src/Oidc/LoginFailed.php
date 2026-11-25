@@ -14,6 +14,10 @@ final class LoginFailed extends \RuntimeException
         SIGNED_IN='signed_in', RATE_LIMIT='rate_limit', SESSION='session';
     public function __construct(public readonly string $reason, ?string $detail = null)
     {
-        parent::__construct('Login failed: ' . $reason . ($detail !== null && preg_match('/^[a-z0-9_:.-]{1,64}$/iD',$detail) ? ':' . $detail : ''));
+        $this->detail = $detail !== null && preg_match('/^[a-z0-9_:.-]{1,64}$/iD', $detail) === 1
+            ? $detail : null;
+        parent::__construct('Login failed: ' . $reason . ($this->detail !== null ? ':' . $this->detail : ''));
     }
+
+    public readonly ?string $detail;
 }
