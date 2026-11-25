@@ -30,10 +30,6 @@ $hasTemplates = $templateAccess !== null && ($templateAccess['teacher'] || $temp
         <input type="hidden" name="csrf" value="<?= $escape($csrf) ?>">
         <button class="sso-button sso-button-primary sso-wrap" type="submit">Mit <?= $escape($provider) ?> anmelden</button>
       </form>
-      <form method="post" action="/auth/logout.php">
-        <input type="hidden" name="csrf" value="<?= $escape($csrf) ?>">
-        <button class="sso-button" type="submit">Laufende Anmeldung abbrechen</button>
-      </form>
     </div>
   </section>
 </main>
