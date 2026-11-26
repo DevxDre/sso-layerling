@@ -63,31 +63,6 @@ final class LoginFailurePage
         if (preg_match('/^ids:(\d{1,3})-(\d{1,3})$/D', $hint, $m) === 1) {
             return 'Die Rollen-IDs weichen ab: ' . $m[1] . ' nur im ID-Token, ' . $m[2] . ' nur in den Kontodaten.';
         }
-        $labels = ['order' => 'Reihenfolge der Rollen', 'fields' => 'Felder der Rollen',
-            'field-order' => 'Reihenfolge der Felder', 'values' => 'Feldwerte'];
-        if ($hint === 'same-ids:other') {
-            return 'Die Rollen-IDs stimmen überein; die Darstellung weicht auf andere Weise ab.';
-        }
-        $fields = ['uuid' => 'uuid', 'displayname' => 'displayName', 'other' => 'ein weiteres Feld'];
-        $kinds = ['type' => 'unterschiedlicher Datentyp', 'value' => 'anderer Wert',
-            'unicode' => 'nur die Unicode-Schreibweise, etwa ein zusammengesetzter oder zerlegter Umlaut',
-            'space' => 'nur Leerzeichen am Rand', 'case' => 'nur Groß-/Kleinschreibung', 'text' => 'anderer Text'];
-        if (preg_match('/^same-ids:([a-z+-]+)(?::([a-z]+):([a-z]+):(\d{1,3})-(\d{1,3}))?$/D', $hint, $m) === 1) {
-            $parts = explode('+', $m[1]);
-            if (array_diff($parts, array_keys($labels)) !== []) {
-                return null;
-            }
-            $sentence = 'Die Rollen-IDs stimmen überein; abweichend: '
-                . implode(', ', array_map(static fn(string $part): string => $labels[$part], $parts));
-            if (isset($m[2])) {
-                if (!isset($fields[$m[2]], $kinds[$m[3]])) {
-                    return null;
-                }
-                $sentence .= ' (' . $fields[$m[2]] . ' in Rolle ' . $m[4] . ' von ' . $m[5] . ': ' . $kinds[$m[3]] . ')';
-            }
-
-            return $sentence . '.';
-        }
 
         return null;
     }

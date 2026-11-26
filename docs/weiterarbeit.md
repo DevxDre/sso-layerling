@@ -52,31 +52,23 @@ Bei fehlgeschlagenen SSO-Anmeldungen zeigt die Fehlerseite jetzt einen festen
 technischen Fehlercode und eine kurze Einordnung. Zulässige Detailcodes wie ein
 OAuth-Fehlercode oder der betroffene Claim helfen bei der Diagnose; Freitext des
 Anmeldedienstes und interne Serverfehlerdetails werden nicht ausgegeben.
-Bei einem Rollen-Claim-Konflikt schreibt der Wrapper unter `sso-layerling oidc_role_mismatch`
-eine Zusammenfassung ins PHP-Fehlerprotokoll. Sie enthält die Rollenzahl und, bei
-vergleichbaren Listen, die Übereinstimmung der Rollen-IDs. Haben beide Seiten dieselben
-IDs, vergleicht die Diagnose zusätzlich die Rollenreihenfolge, die Feldnamen und deren
-Reihenfolge sowie die Werte gemeinsam vorhandener Felder. Rohdaten wie Token, Rollen-IDs,
-Feldnamen und Feldwerte werden dafür nicht protokolliert. Die Anmeldung bleibt abgelehnt.
-Weichen die Rollen-IDs ab, nennt die Zusammenfassung zusätzlich, wie viele Rollen nur im
-ID-Token und wie viele nur in den Kontodaten stehen. Weil der Zugang zum PHP-Fehlerprotokoll
-beim Hoster nicht belegt ist, zeigt die Fehlerseite denselben Befund als festen Kurzcode
-unter „Rollenabgleich“ mit deutscher Erläuterung, etwa `ids:0-1` oder `same-ids:order`.
-Für die Rechte zählt nur die Menge der Rollen-IDs; ob der Vergleich darauf gelockert wird,
-ist nach dem Befund gesondert zu entscheiden.
-Weichen Feldwerte ab, nennt der Kurzcode für die erste Abweichung das Feld (`uuid`,
-`displayname`, sonst `other`), die Art und die Rollenposition, etwa
-`same-ids:values:displayname:case:2-3`. Arten: `type`, `value`, `unicode` (gleich nach
-NFC-Normalisierung), `space` (gleich ohne Randleerzeichen), `case` (nur Groß-/Kleinschreibung)
-und `text`. Die Unicode-Prüfung braucht die PHP-Erweiterung `intl`; ohne sie erscheint
-eine reine Unicode-Abweichung als `text`. Werte selbst werden weder angezeigt noch protokolliert.
+Bei einem abgelehnten Rollen-Claim schreibt der Wrapper unter `sso-layerling oidc_role_mismatch`
+eine Zusammenfassung ins PHP-Fehlerprotokoll: die Rollenzahl, einen festen Formfehler
+(`invalid_role_list`, `invalid_role_id`, `duplicate_role_id`) oder, bei abweichenden
+Rollen-IDs, wie viele Rollen nur im ID-Token und wie viele nur in den Kontodaten stehen.
+Weil der Zugang zum PHP-Fehlerprotokoll beim Hoster nicht belegt ist, zeigt die Fehlerseite
+denselben Befund als festen Kurzcode unter „Rollenabgleich“ mit deutscher Erläuterung, etwa
+`ids:0-1` oder `userinfo:invalid_role_list`. Token, Rollen-IDs, Feldnamen und Feldwerte werden
+weder angezeigt noch protokolliert.
 
 Befund im Betrieb: `same-ids:values:displayname:text:1-1` bei einem Konto mit englischer
 IServ-Kontosprache. Der Anbieter übersetzt den Rollennamen nur in einer der beiden Antworten.
 Seit [ADR 0003](adr/0003-rollen-claim-konsistenz.md) gilt der Rollen-Claim als konsistent,
 wenn beide Antworten dieselbe Menge gültiger Rollen-IDs liefern. Abweichende IDs und
 ungültige Listen bleiben abgelehnt; Gruppen werden weiterhin exakt verglichen. Die Regression
-mit sieben angenommenen Fällen scheitert mit dem vorherigen Vergleich.
+mit sieben angenommenen Fällen scheitert mit dem vorherigen Vergleich. Die zuvor zur Ursachensuche
+ergänzte Auswertung von Reihenfolge, Feldern und Feldwerten (`same-ids:…`) war danach
+nicht mehr erreichbar und wurde entfernt.
 
 Nach einem fehlgeschlagenen Callback blieb der Anmeldekontext bisher im Zustand
 `processing`. Jeder neue Anmeldestart im selben Browser endete dann mit `transaction`,

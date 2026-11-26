@@ -38,8 +38,8 @@ eine eigene Entscheidung.
   Die Rechte ändern sich dadurch nicht, weil die Rollen-IDs übereinstimmen müssen.
 - Die UserInfo kann weiterhin keine Rolle gewähren, die das signierte ID-Token nicht enthält.
 - Bei abgelehnten Rollen-Claims bleiben Protokollzusammenfassung und Kurzbefund auf der
-  Fehlerseite erhalten (`ids:a-b`, `token:…`, `userinfo:…`). Die Befunde `same-ids:…`
-  treten bei Ablehnungen nicht mehr auf, weil gleiche ID-Mengen jetzt akzeptiert werden.
+  Fehlerseite erhalten (`ids:a-b`, `token:…`, `userinfo:…`). Die Auswertung von Reihenfolge,
+  Feldern und Feldwerten (`same-ids:…`) entfällt, weil gleiche ID-Mengen jetzt akzeptiert werden.
 - Regressionen prüfen angenommene Fälle (übersetzter Name, Reihenfolge, Feldreihenfolge,
   Zusatzfeld, Schreibweise, Unicode-Form, Typ der Rollen-UUID) samt gespeicherter Rollen-IDs
   sowie die weiterhin abgelehnten Fälle.
