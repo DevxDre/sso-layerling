@@ -64,6 +64,12 @@ beim Hoster nicht belegt ist, zeigt die Fehlerseite denselben Befund als festen 
 unter „Rollenabgleich“ mit deutscher Erläuterung, etwa `ids:0-1` oder `same-ids:order`.
 Für die Rechte zählt nur die Menge der Rollen-IDs; ob der Vergleich darauf gelockert wird,
 ist nach dem Befund gesondert zu entscheiden.
+Weichen Feldwerte ab, nennt der Kurzcode für die erste Abweichung das Feld (`uuid`,
+`displayname`, sonst `other`), die Art und die Rollenposition, etwa
+`same-ids:values:displayname:case:2-3`. Arten: `type`, `value`, `unicode` (gleich nach
+NFC-Normalisierung), `space` (gleich ohne Randleerzeichen), `case` (nur Groß-/Kleinschreibung)
+und `text`. Die Unicode-Prüfung braucht die PHP-Erweiterung `intl`; ohne sie erscheint
+eine reine Unicode-Abweichung als `text`. Werte selbst werden weder angezeigt noch protokolliert.
 
 Nach einem fehlgeschlagenen Callback blieb der Anmeldekontext bisher im Zustand
 `processing`. Jeder neue Anmeldestart im selben Browser endete dann mit `transaction`,

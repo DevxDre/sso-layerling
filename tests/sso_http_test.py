@@ -263,7 +263,20 @@ class SsoHTTPTest(unittest.TestCase):
             ('extra field', [student], [student | private_field],
              matches | {'fieldNamesMatch': False, 'fieldOrderMatches': None}, 'same-ids:fields', 'abweichend: Felder der Rollen'),
             ('field value', [student], [student | {'displayName': 'Other fixture name'}],
-             matches | {'sharedFieldValuesMatch': False}, 'same-ids:values', 'abweichend: Feldwerte'),
+             matches | {'sharedFieldValuesMatch': False, 'valueDifferences': 1, 'firstValueDifference': {'position': 1, 'roles': 1, 'field': 'displayname', 'kind': 'text'}},
+             'same-ids:values:displayname:text:1-1', 'Feldwerte (displayName in Rolle 1 von 1: anderer Text)'),
+            ('field case', [student], [student | {'displayName': 'fixture STUDENT'}],
+             matches | {'sharedFieldValuesMatch': False, 'valueDifferences': 1, 'firstValueDifference': {'position': 1, 'roles': 1, 'field': 'displayname', 'kind': 'case'}},
+             'same-ids:values:displayname:case:1-1', 'nur Groß-/Kleinschreibung'),
+            ('field space', [student], [student | {'displayName': 'Fixture student '}],
+             matches | {'sharedFieldValuesMatch': False, 'valueDifferences': 1, 'firstValueDifference': {'position': 1, 'roles': 1, 'field': 'displayname', 'kind': 'space'}},
+             'same-ids:values:displayname:space:1-1', 'nur Leerzeichen am Rand'),
+            ('field unicode', [student | {'displayName': 'Fixture Sch\u00fcler'}], [student | {'displayName': 'Fixture Schu\u0308ler'}],
+             matches | {'sharedFieldValuesMatch': False, 'valueDifferences': 1, 'firstValueDifference': {'position': 1, 'roles': 1, 'field': 'displayname', 'kind': 'unicode'}},
+             'same-ids:values:displayname:unicode:1-1', 'nur die Unicode-Schreibweise'),
+            ('field type in second role', [student, second | {'uuid': 'fixture-role-uuid'}], [student, second | {'uuid': 7}],
+             matches | {'sharedFieldValuesMatch': False, 'valueDifferences': 1, 'firstValueDifference': {'position': 2, 'roles': 2, 'field': 'uuid', 'kind': 'type'}},
+             'same-ids:values:uuid:type:2-2', 'uuid in Rolle 2 von 2: unterschiedlicher Datentyp'),
             ('invalid list', [student], student, {'userInfoIssue': 'invalid_role_list'},
              'userinfo:invalid_role_list', 'Kontodaten ist keine gültige Rollenliste'),
             ('duplicate role', [student], [student, student], {'userInfoIssue': 'duplicate_role_id'},
@@ -283,7 +296,8 @@ class SsoHTTPTest(unittest.TestCase):
                 # The fixed-vocabulary finding is shown to the user; role IDs and field values are not.
                 self.assertIn(('Rollenabgleich: <code>' + hint + '</code>').encode(), body)
                 self.assertIn(sentence.encode(), body)
-                for secret in [b'ROLE_STUDENT', b'ROLE_FIXTURE', b'Fixture student', b'fixturePrivateField', b'fixture private value']:
+                for secret in [b'ROLE_STUDENT', b'ROLE_FIXTURE', b'Fixture student', b'fixture STUDENT', b'Fixture Sch', b'fixture-role-uuid',
+                               b'Other fixture name', b'fixturePrivateField', b'fixture private value']:
                     self.assertNotIn(secret, body)
                 self.assertNotIn('SSO_LAYERLING_SSO_TEST', self.client.cookies)
                 with log.open('rb') as stream:
