@@ -247,36 +247,15 @@ class SsoHTTPTest(unittest.TestCase):
     def test_19_role_mismatch_logs_comparison_without_claim_values(self):
         student = {'id': 'ROLE_STUDENT', 'displayName': 'Fixture student'}
         second = {'id': 'ROLE_FIXTURE', 'displayName': 'Fixture extra role'}
-        private_field = {'fixturePrivateField': 'fixture private value'}
-        matches = {'roleIdsMatch': True, 'roleOrderMatches': True, 'fieldNamesMatch': True,
-                   'fieldOrderMatches': True, 'sharedFieldValuesMatch': True}
         cases = [
             ('role IDs', [student], [second], {'roleIdsMatch': False, 'onlyInIdToken': 1, 'onlyInUserInfo': 1},
              'ids:1-1', '1 nur im ID-Token, 1 nur in den Kontodaten'),
             ('role missing in token', [student], [student, second],
              {'roleIdsMatch': False, 'onlyInIdToken': 0, 'onlyInUserInfo': 1},
              'ids:0-1', '0 nur im ID-Token, 1 nur in den Kontodaten'),
-            ('role order', [student, second], [second, student], matches | {'roleOrderMatches': False},
-             'same-ids:order', 'abweichend: Reihenfolge der Rollen'),
-            ('field order', [student], [{'displayName': 'Fixture student', 'id': 'ROLE_STUDENT'}],
-             matches | {'fieldOrderMatches': False}, 'same-ids:field-order', 'abweichend: Reihenfolge der Felder'),
-            ('extra field', [student], [student | private_field],
-             matches | {'fieldNamesMatch': False, 'fieldOrderMatches': None}, 'same-ids:fields', 'abweichend: Felder der Rollen'),
-            ('field value', [student], [student | {'displayName': 'Other fixture name'}],
-             matches | {'sharedFieldValuesMatch': False, 'valueDifferences': 1, 'firstValueDifference': {'position': 1, 'roles': 1, 'field': 'displayname', 'kind': 'text'}},
-             'same-ids:values:displayname:text:1-1', 'Feldwerte (displayName in Rolle 1 von 1: anderer Text)'),
-            ('field case', [student], [student | {'displayName': 'fixture STUDENT'}],
-             matches | {'sharedFieldValuesMatch': False, 'valueDifferences': 1, 'firstValueDifference': {'position': 1, 'roles': 1, 'field': 'displayname', 'kind': 'case'}},
-             'same-ids:values:displayname:case:1-1', 'nur Groß-/Kleinschreibung'),
-            ('field space', [student], [student | {'displayName': 'Fixture student '}],
-             matches | {'sharedFieldValuesMatch': False, 'valueDifferences': 1, 'firstValueDifference': {'position': 1, 'roles': 1, 'field': 'displayname', 'kind': 'space'}},
-             'same-ids:values:displayname:space:1-1', 'nur Leerzeichen am Rand'),
-            ('field unicode', [student | {'displayName': 'Fixture Sch\u00fcler'}], [student | {'displayName': 'Fixture Schu\u0308ler'}],
-             matches | {'sharedFieldValuesMatch': False, 'valueDifferences': 1, 'firstValueDifference': {'position': 1, 'roles': 1, 'field': 'displayname', 'kind': 'unicode'}},
-             'same-ids:values:displayname:unicode:1-1', 'nur die Unicode-Schreibweise'),
-            ('field type in second role', [student, second | {'uuid': 'fixture-role-uuid'}], [student, second | {'uuid': 7}],
-             matches | {'sharedFieldValuesMatch': False, 'valueDifferences': 1, 'firstValueDifference': {'position': 2, 'roles': 2, 'field': 'uuid', 'kind': 'type'}},
-             'same-ids:values:uuid:type:2-2', 'uuid in Rolle 2 von 2: unterschiedlicher Datentyp'),
+            ('role extra in token', [student, second], [student],
+             {'roleIdsMatch': False, 'onlyInIdToken': 1, 'onlyInUserInfo': 0},
+             'ids:1-0', '1 nur im ID-Token, 0 nur in den Kontodaten'),
             ('invalid list', [student], student, {'userInfoIssue': 'invalid_role_list'},
              'userinfo:invalid_role_list', 'Kontodaten ist keine gültige Rollenliste'),
             ('duplicate role', [student], [student, student], {'userInfoIssue': 'duplicate_role_id'},
@@ -308,6 +287,36 @@ class SsoHTTPTest(unittest.TestCase):
                             'idTokenIssue': None, 'userInfoIssue': None} | result
                 self.assertEqual([json.loads(summary) for summary in summaries], [expected])
         self.assertEqual(principal_file.read_bytes(), before)
+
+    def test_21_role_claims_with_the_same_ids_are_accepted(self):
+        # ADR 0003: only role IDs grant rights. Providers such as IServ localize displayName per account
+        # language in one of both responses; order, display names, UUIDs and extra fields must not block login.
+        student = {'id': 'ROLE_STUDENT', 'displayName': 'Fixture student'}
+        second = {'id': 'ROLE_FIXTURE', 'displayName': 'Fixture extra role'}
+        cases = [
+            ('localized display name', [student], [student | {'displayName': 'Fixture pupil'}]),
+            ('role order', [student, second], [second, student]),
+            ('field order', [student], [{'displayName': 'Fixture student', 'id': 'ROLE_STUDENT'}]),
+            ('extra field', [student], [student | {'fixturePrivateField': 'fixture private value'}]),
+            ('display name case and space', [student], [student | {'displayName': ' fixture STUDENT '}]),
+            ('unicode form', [student | {'displayName': 'Fixture Sch\u00fcler'}], [student | {'displayName': 'Fixture Schu\u0308ler'}]),
+            ('role uuid type', [student, second | {'uuid': 'fixture-role-uuid'}], [student, second | {'uuid': 7}]),
+        ]
+        principal_file = self.private / 'principals.json'
+        log = self.root / 'server.log'
+        for name, token_roles, info_roles in cases:
+            with self.subTest(name=name):
+                self.client = Client(self)
+                callback, _ = self.begin(claims={'iserv:roles': token_roles}, userinfoClaims={'iserv:roles': info_roles})
+                offset = log.stat().st_size
+                status, _, body = self.client.request(callback)
+                self.assertEqual(status, 303, body[:300])
+                self.assertIn('SSO_LAYERLING_SSO_TEST', self.client.cookies)
+                with log.open('rb') as stream:
+                    stream.seek(offset)
+                    self.assertNotIn(b'oidc_role_mismatch', stream.read())
+                latest = max(json.loads(principal_file.read_text()).values(), key=lambda record: record['loginSequence'])
+                self.assertEqual(sorted(latest['roles']), sorted({role['id'] for role in info_roles}))
 
     def test_20_failed_callback_allows_a_new_login_in_the_same_browser(self):
         student = {'id': 'ROLE_STUDENT', 'displayName': 'Fixture student'}

@@ -88,6 +88,19 @@ final class RoleClaimDiagnostic
         return $lower($token) === $lower($info) ? 'case' : 'text';
     }
 
+    /**
+     * Whether both role claims grant the same set of valid role IDs. Only the IDs are authorization
+     * relevant; order, display names (localized by some providers), UUIDs and extra fields are not.
+     */
+    public static function sameRoleIds(mixed $idToken, mixed $userInfo, array $mapping): bool
+    {
+        $tokenRoles = self::byId($idToken, $mapping);
+        $infoRoles = self::byId($userInfo, $mapping);
+
+        return is_array($tokenRoles) && is_array($infoRoles) && count($tokenRoles) === count($infoRoles)
+            && array_diff_key($tokenRoles, $infoRoles) === [];
+    }
+
     /** Compact fixed-vocabulary finding for the login failure page; never contains IDs, names or values. */
     public static function hint(array $summary): string
     {

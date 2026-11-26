@@ -71,6 +71,13 @@ NFC-Normalisierung), `space` (gleich ohne Randleerzeichen), `case` (nur Groß-/K
 und `text`. Die Unicode-Prüfung braucht die PHP-Erweiterung `intl`; ohne sie erscheint
 eine reine Unicode-Abweichung als `text`. Werte selbst werden weder angezeigt noch protokolliert.
 
+Befund im Betrieb: `same-ids:values:displayname:text:1-1` bei einem Konto mit englischer
+IServ-Kontosprache. Der Anbieter übersetzt den Rollennamen nur in einer der beiden Antworten.
+Seit [ADR 0003](adr/0003-rollen-claim-konsistenz.md) gilt der Rollen-Claim als konsistent,
+wenn beide Antworten dieselbe Menge gültiger Rollen-IDs liefern. Abweichende IDs und
+ungültige Listen bleiben abgelehnt; Gruppen werden weiterhin exakt verglichen. Die Regression
+mit sieben angenommenen Fällen scheitert mit dem vorherigen Vergleich.
+
 Nach einem fehlgeschlagenen Callback blieb der Anmeldekontext bisher im Zustand
 `processing`. Jeder neue Anmeldestart im selben Browser endete dann mit `transaction`,
 bis das Anmelde-Cookie verschwand oder sechs Stunden vergangen waren. Das verdeckte etwa

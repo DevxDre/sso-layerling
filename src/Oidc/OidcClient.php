@@ -109,6 +109,10 @@ final class OidcClient
             if (array_key_exists($name, $claims) === true && array_key_exists($name, $userinfo) === true && serialize($claims[$name]) !== serialize($userinfo[$name])) {
                 $hint = null;
                 if ($name === $mapping['roles']['claim']) {
+                    // ADR 0003: roles must agree on their IDs only; providers may localize display names.
+                    if (RoleClaimDiagnostic::sameRoleIds($claims[$name], $userinfo[$name], $mapping['roles'])) {
+                        continue;
+                    }
                     $summary = RoleClaimDiagnostic::compare($claims[$name], $userinfo[$name], $mapping['roles']);
                     error_log('sso-layerling oidc_role_mismatch ' . json_encode($summary, JSON_THROW_ON_ERROR));
                     $hint = RoleClaimDiagnostic::hint($summary);

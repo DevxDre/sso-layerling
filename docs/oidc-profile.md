@@ -25,7 +25,8 @@ Anmeldeserver enthält `provider` alle folgenden Felder.
 
 Claim-Schlüssel beziehen sich auf die oberste Ebene von ID-Token oder gebundener
 UserInfo. Überlappende Identitäts-, Rollen- und Gruppen-Claims müssen zwischen beiden
-Antworten übereinstimmen. IDs werden exakt und mit Beachtung der Groß- und Kleinschreibung
+Antworten übereinstimmen; beim Rollen-Claim genügt dieselbe Menge gültiger Rollen-IDs
+([ADR 0003](adr/0003-rollen-claim-konsistenz.md)), etwa bei übersetzten Rollennamen. IDs werden exakt und mit Beachtung der Groß- und Kleinschreibung
 verglichen. UUIDs in der Eigentümerbindung werden wie bisher in Kleinbuchstaben
 normalisiert. Gruppenkennungen bestehen aus ASCII-Buchstaben, Ziffern, Unterstrich und
 Bindestrich. Rollenkennungen dürfen zusätzlich Punkt und Doppelpunkt enthalten.

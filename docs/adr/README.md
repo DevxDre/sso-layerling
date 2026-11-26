@@ -14,6 +14,7 @@ Alte Entscheidungen bleiben als solche nachvollziehbar.
 
 - [0001: SSO-Claims und letzte Schülerzuordnung](0001-sso-claims.md) – bestehende Entscheidung dokumentiert.
 - [0002: OIDC-Profil und stabile Eigentümerbindung je Deployment](0002-oidc-deployment-profile.md).
+- [0003: Rollen-Claim zwischen ID-Token und UserInfo über Rollen-IDs abgleichen](0003-rollen-claim-konsistenz.md).
 
 ## Vorlage
 
