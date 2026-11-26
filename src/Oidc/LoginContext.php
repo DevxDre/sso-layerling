@@ -80,6 +80,15 @@ final class LoginContext
         $this->save();
         return $result;
     }
+    /** End a callback that failed after consume(); the code stays used, a new login may begin. */
+    public function fail(int $sequence): void
+    {
+        if (($this->data['status'] ?? '') !== 'processing' || ($this->data['sequence'] ?? null) !== $sequence) {
+            return;
+        }
+        $this->data['status'] = 'failed';
+        $this->save();
+    }
     public function cancel(): void
     {
         $this->data['status'] = 'cancelled';

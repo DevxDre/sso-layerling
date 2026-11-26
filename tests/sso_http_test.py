@@ -295,4 +295,29 @@ class SsoHTTPTest(unittest.TestCase):
                 self.assertEqual([json.loads(summary) for summary in summaries], [expected])
         self.assertEqual(principal_file.read_bytes(), before)
 
+    def test_20_failed_callback_allows_a_new_login_in_the_same_browser(self):
+        student = {'id': 'ROLE_STUDENT', 'displayName': 'Fixture student'}
+        failures = [
+            ('role mismatch', {'claims': {'iserv:roles': [student]},
+                               'userinfoClaims': {'iserv:roles': [student, {'id': 'ROLE_FIXTURE'}]}},
+             None, b'userinfo_mismatch:iserv:roles'),
+            ('provider cancel', {}, 'access_denied', b'provider_error:access_denied'),
+        ]
+        for name, flags, provider_error, code in failures:
+            with self.subTest(name=name):
+                self.client = Client(self)
+                callback, _ = self.begin(**flags)
+                if provider_error:
+                    callback = callback.replace('code=fixture-code', 'error=' + provider_error)
+                status, _, body = self.client.request(callback)
+                self.assertEqual(status, 503)
+                self.assertIn(b'<code>' + code + b'</code>', body)
+                # The used code stays used: reloading the failure page is still rejected.
+                self.assertIn(b'<code>transaction</code>', self.client.request(callback)[2])
+                # A new login in the same browser context must start and complete normally.
+                retry, _ = self.begin()
+                status, headers, body = self.client.request(retry)
+                self.assertEqual(status, 303, body[:300])
+                self.assertIn('SSO_LAYERLING_SSO_TEST', self.client.cookies)
+
 if __name__=='__main__':unittest.main(argv=['sso_http_test.py']+remaining,verbosity=2)

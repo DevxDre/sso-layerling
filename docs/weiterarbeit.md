@@ -65,6 +65,14 @@ unter „Rollenabgleich“ mit deutscher Erläuterung, etwa `ids:0-1` oder `same
 Für die Rechte zählt nur die Menge der Rollen-IDs; ob der Vergleich darauf gelockert wird,
 ist nach dem Befund gesondert zu entscheiden.
 
+Nach einem fehlgeschlagenen Callback blieb der Anmeldekontext bisher im Zustand
+`processing`. Jeder neue Anmeldestart im selben Browser endete dann mit `transaction`,
+bis das Anmelde-Cookie verschwand oder sechs Stunden vergangen waren. Das verdeckte etwa
+den Rollenbefund nach einem ersten `userinfo_mismatch`. Jetzt beendet ein Fehlschlag nach
+dem Verbrauch den Versuch als `failed`. Das Neuladen der Fehlerseite bleibt abgelehnt;
+ein neuer Start funktioniert. Die Regression prüft Rollen-Konflikt und Abbruch beim
+Anmeldedienst; mit dem vorherigen Stand scheitert sie.
+
 Die mit der Diagnose eingeführte CAD-Header-Härtung ist korrigiert: `/cad.php` sendet
 wieder `Referrer-Policy: same-origin`, und `connect-src` erlaubt `data:`. Mit
 `no-referrer` lehnte die Origin-Prüfung neue Designs und Speicherstände in Firefox

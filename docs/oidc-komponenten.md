@@ -147,6 +147,8 @@ sind bei der Portierung explizit zu behandeln und mit eigenen Fällen zu prüfen
    nicht direkt als OIDC-Startadapter verwendet werden.
 3. Callback: Transaktion einmalig verbrauchen, Lock vor Netzwerk lösen, vollständig validieren.
    Noch keine globale Berechtigungssperre während externer HTTP-Anfragen halten.
+   Scheitert der Callback nach dem Verbrauch, wird der Versuch als `failed` beendet: Der Code
+   bleibt verbraucht, eine neue Anmeldung im selben Browser ist aber wieder möglich.
 4. Tokenfreie Identität über einen privaten IdentityStore auf eine stabile interne Ordner-ID
    abbilden. IServ-spezifische Empfehlung: `(iss, iserv:uuid)`; `sub` weiterhin für Protokollbindung.
    Keine E-Mail-/Namenszuordnung, keine Übernahme vorhandener Kirby-Konten oder -Cookies.

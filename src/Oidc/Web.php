@@ -335,31 +335,50 @@ final class Web
         [$tx, $sequence] = $ctx->consume($_GET['state'] ?? null, $this->config, time());
         $contextId = $ctx->id;
         $ctx->close();
-        // No native session or authorization/context lock during external requests.
-        if (isset($_GET['error']) || (isset($_GET['iss']) && $_GET['iss'] !== $this->config->profile->issuer)) {
-            $providerError = $_GET['error'] ?? null;
-            $detail = is_string($providerError) && preg_match('/^[A-Za-z0-9_-]{1,40}$/D', $providerError) === 1
-                ? strtolower($providerError) : null;
-            throw new LoginFailed(LoginFailed::PROVIDER_ERROR, $detail);
-        }
-        $code = $_GET['code'] ?? null;
-        if (!is_string($code) || !preg_match('/^[\x21-\x7e]{1,4096}$/D', $code)) { throw new LoginFailed(LoginFailed::CODE); }
-        $identity = (new OidcClient($this->config, $this->transport, static fn() => time()))->complete($tx, $code);
-        $claims = Claims::from($identity, $this->config->profile);
-        $ctx = new LoginContext($this->private, $contextId);
-        $ctx->finish($sequence, function () use ($claims, $sequence): void {
-            if ($this->openSession() !== null) {
-                session_write_close();
-                throw new LoginFailed(LoginFailed::SIGNED_IN);
+        // From here on the code is used. A failure must end this attempt, otherwise the
+        // browser context stays "processing" and every new login fails with transaction.
+        try {
+            // No native session or authorization/context lock during external requests.
+            if (isset($_GET['error']) || (isset($_GET['iss']) && $_GET['iss'] !== $this->config->profile->issuer)) {
+                $providerError = $_GET['error'] ?? null;
+                $detail = is_string($providerError) && preg_match('/^[A-Za-z0-9_-]{1,40}$/D', $providerError) === 1
+                    ? strtolower($providerError) : null;
+                throw new LoginFailed(LoginFailed::PROVIDER_ERROR, $detail);
             }
-            $owner = (new PrincipalWriter($this->private))->write($claims, $sequence, time(),
-                $this->storage?->values['studentGroupIds'] ?? $this->config->profile->studentGroupIds,
-                $this->storage !== null ? $this->storage->values['studentRoleId'] : $this->config->profile->studentRoleId,
-                $this->config->profile->authorizationMapping());
-            $this->issue($owner, $claims);
-        });
+            $code = $_GET['code'] ?? null;
+            if (!is_string($code) || !preg_match('/^[\x21-\x7e]{1,4096}$/D', $code)) { throw new LoginFailed(LoginFailed::CODE); }
+            $identity = (new OidcClient($this->config, $this->transport, static fn() => time()))->complete($tx, $code);
+            $claims = Claims::from($identity, $this->config->profile);
+            $ctx = new LoginContext($this->private, $contextId);
+            $ctx->finish($sequence, function () use ($claims, $sequence): void {
+                if ($this->openSession() !== null) {
+                    session_write_close();
+                    throw new LoginFailed(LoginFailed::SIGNED_IN);
+                }
+                $owner = (new PrincipalWriter($this->private))->write($claims, $sequence, time(),
+                    $this->storage?->values['studentGroupIds'] ?? $this->config->profile->studentGroupIds,
+                    $this->storage !== null ? $this->storage->values['studentRoleId'] : $this->config->profile->studentRoleId,
+                    $this->config->profile->authorizationMapping());
+                $this->issue($owner, $claims);
+            });
+        } catch (\Throwable $error) {
+            $ctx->close();
+            $this->failAttempt($contextId, $sequence);
+            throw $error;
+        }
         $ctx->close();
         $this->redirect($this->hasCad() ? '/cad.php' : '/');
+    }
+    /** Mark a failed callback as ended; keep the original failure visible if that is not possible. */
+    private function failAttempt(string $contextId, int $sequence): void
+    {
+        try {
+            $ctx = new LoginContext($this->private, $contextId);
+            $ctx->fail($sequence);
+            $ctx->close();
+        } catch (\Throwable) {
+            // The context stays blocked as before; the user still sees the original error.
+        }
     }
     public function logout(): never
     {
